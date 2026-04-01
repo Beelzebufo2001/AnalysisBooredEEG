@@ -4,6 +4,10 @@ from pathlib import Path
 BASE_DIR   = Path(__file__).resolve().parent
 DATA_DIR   = (BASE_DIR / "../../EEG/MS_data").resolve()
 OUTPUT_DIR = (BASE_DIR / "results").resolve()
+CORR_OUTPUT_DIR = Path("./Corr_matrices")
+VIDEO_OUTPUT_DIR = Path("./Corr_videos")
+SUMMARY_OUTPUT_DIR = Path("./Connectivity_summary")
+REGION_OUTPUT_DIR = Path("./Region_connectivity")
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 DATA_TYPE    = "ica"
@@ -35,7 +39,7 @@ FREQ_BANDS = {
 TARGET_SFREQ   = 250    # Hz — downsample target
 CORR_HIGHPASS  = 1.0    # Hz
 CORR_LOWPASS   = 45.0   # Hz
-BUTTER_ORDER   = 6
+#BUTTER_ORDER   = 6
 SNIPPET_LEN_S  = 10     # seconds per correlation window
 STEP_S         = 1      # seconds between windows
 
