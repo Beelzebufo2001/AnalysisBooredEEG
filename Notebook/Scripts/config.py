@@ -4,7 +4,7 @@ from pathlib import Path
 BASE_DIR   = Path(__file__).resolve().parent
 DATA_DIR   = (BASE_DIR / "../../EEG/MS_data").resolve()
 OUTPUT_DIR = (BASE_DIR / "results").resolve()
-CORR_OUTPUT_DIR = Path("./Corr_matrices")
+CORR_OUTPUT_DIR = Path("./corr_matrices")
 VIDEO_OUTPUT_DIR = Path("./Corr_videos")
 SUMMARY_OUTPUT_DIR = Path("./Connectivity_summary")
 REGION_OUTPUT_DIR = Path("./Region_connectivity")

@@ -9,10 +9,10 @@ import argparse
 from pathlib import Path
 import warnings as w
 
-import mne
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
-from scipy.signal import decimate
-from elephant.signal_processing import butter
 
 import config
 
@@ -20,111 +20,220 @@ import config
 # =============================================================================
 # CLI
 # =============================================================================
-def parse_args()
+def parse_args():
     parser = argparse.ArgumentParser(description="Connectivity analysis pipeline")
-    
+
     parser.add_argument(
         "--subjects", nargs="+", default=None,
         help="Subject IDs to process (e.g. C01 C02 C03). "
              "Defaults to all folders matching SUBJECT_GLOB in CORR_OUTPUT_DIR.",
     )
-    parser.add_argument("--change", default=None)
     
+
     return parser.parse_args()
- 
+
+
 # =============================================================================
 # HELPERS
 # =============================================================================
-def ensure_dir_exists(dirpath):
-    dirpath = Path(dirpath)
-    if not dirpath.exists():
-        print(f"Creating directory: {dirpath}")
-        dirpath.mkdir(parents=True, exist_ok=True)
-
-
-def load_matrices(file_path):
-    with w.catch_warnings():
-        w.simplefilter("ignore", RuntimeWarning)
-        raw = mne.io.read_raw_fif(fname=file_path, preload=False, verbose=False)
-
-    raw.set_montage(
-        mne.channels.make_standard_montage(config.DEFAULT_MONTAGE),
-        on_missing="ignore"
-    )
-    return raw
-
-
-def get_valid_subjects_and_paths(preferred, folder_path=None, clean_alg=None, recording="RS_before"):
+def load_matrices(subject_dir):
     """
-    Return matching subjects and their FIF paths.
+    Load all .npy correlation matrices for one subject.
 
-    Rules:
-    - only folders starting with 'C'
-    - preferred can be 'all' or list like ['C01', 'C03']
-    - choose files matching selected recording
-    - ignore split files ending with '-1.fif'
+    Returns
+    -------
+    connectivity : ndarray
+        Shape: (time, channels, channels)
     """
+    files = sorted(subject_dir.glob("*.npy"))
+    if not files:
+        raise FileNotFoundError(f"No .npy files found in {subject_dir}")
 
-        if not subject_dir.is_dir():
-            continue
+    matrices = [np.load(f) for f in files]
+    connectivity = np.stack(matrices)  # TIME, MATRIX
 
-        subject = subject_dir.name
-
-        if preferred != "all" and subject not in preferred:
-            print(f"Skipping {subject}: missing folder {clean_dir}")
-            continue
-
-        matching_files = sorted(
-            [
-                f for f in clean_dir.iterdir()
-                if (
-                    f.is_file()
-                    and f.suffix == ".fif"
-                    and recording in f.name
-                    and clean_alg in f.name
-                    and not f.stem.endswith("-1")
-                )
-            ]
-        )
-
-        if not matching_files:
-            print(f"Skipping {subject}: no matching .fif file for {recording}")
-            continue
-
-        chosen = matching_files[0]
-        subjects.append(subject)
-        file_paths.append(chosen)
-
-        print(f"Adding {subject}: {chosen.name}")
-
-    return subjects, file_paths
+    return connectivity
 
 
 def resolve_subjects(args):
-    preferred = args.subject if args.subject is not None else "all"
+    """
+    Return list of subject IDs and mapping subject -> directory
+    """
+    corr_dir = Path(config.CORR_OUTPUT_DIR)
+    print(f"Openning correlation matrices directory in: {corr_dir}")
 
-    folder_path = Path(folder_path or config.CORR_OUTPUT_DIR)
+    if not corr_dir.exists():
+        print(f"ERROR: Correlation directory not found: {corr_dir}", file=sys.stderr)
+        sys.exit(1)
 
-    print(f"Discovering subjects in: {folder_path}")
-    print(f"Recording: {recording}")
+    discovered = {
+        subject_dir.name: subject_dir
+        for subject_dir in sorted(corr_dir.iterdir())
+        if subject_dir.is_dir()
+    }
 
-    subjects = []
-    file_paths = []
+    if not discovered:
+        print(f"ERROR: No subject folders found in {corr_dir}", file=sys.stderr)
+        sys.exit(1)
 
-    for subject_dir in sorted(folder_path.iterdir()):
-    subject_file_map = dict(zip(subjects, paths))
-
-    if preferred != "all":
-        missing = [s for s in preferred if s not in subject_file_map]
+    if args.subjects is None:
+        subjects = list(discovered.keys())
+    else:
+        missing = [s for s in args.subjects if s not in discovered]
         if missing:
-            print(f"ERROR: Subjects not found or missing files: {missing}", file=sys.stderr)
+            print(
+                f"ERROR: Requested subjects not found: {missing}",
+                file=sys.stderr
+            )
             sys.exit(1)
 
-    return subjects, subject_file_map
+        subjects = args.subjects
 
-def main() -> None:
-    
- if __name__ == "__main__":
+    return subjects, discovered
+
+
+def compute_metrics(connectivity):
+    """
+    Compute:
+    - mean connectivity over time
+    - variability over time
+    """
+    upper_indices = np.triu_indices(connectivity.shape[1], k=1)
+
+    mean_values = []
+    variability = []
+
+    for matrix in connectivity:
+        pair_vals = matrix[upper_indices]
+
+        mean_values.append(np.mean(pair_vals))
+        variability.append(np.std(pair_vals))
+
+    return np.array(mean_values), np.array(variability)
+
+
+def save_plot(subject, mean_values, variability):
+    out_dir = Path(config.SUMMARY_OUTPUT_DIR)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    mid = len(mean_values) // 2
+
+    # -------------------------------------------------------------------------
+    # Mean connectivity plot
+    # -------------------------------------------------------------------------
+    fig, ax = plt.subplots(figsize=(10, 3))
+
+    ax.plot(mean_values, color="darkmagenta", linewidth=2)
+    ax.axvline(mid, color="black", linestyle="--", label="Condition switch")
+
+    ax.set_title(f"Mean connectivity over time: {subject}")
+    ax.set_xlabel("Time window")
+    ax.set_ylabel("Mean connectivity")
+    ax.legend()
+
+    fig.tight_layout()
+    fig.savefig(out_dir / f"{subject}_mean_connectivity.png", dpi=300)
+    plt.close(fig)
+
+    # -------------------------------------------------------------------------
+    # Variability plot
+    # -------------------------------------------------------------------------
+    fig, ax = plt.subplots(figsize=(10, 3))
+
+    ax.plot(
+        range(mid),
+        variability[:mid],
+        color="khaki",
+        label="Eyes open",
+    )
+
+    ax.plot(
+        range(mid, len(variability)),
+        variability[mid:],
+        color="powderblue",
+        label="Eyes closed",
+    )
+
+    ax.axvline(
+        mid,
+        color="red",
+        linestyle="--",
+        label="Condition switch"
+    )
+
+    ax.set_title(f"Variability across electrode pairs: {subject}")
+    ax.set_xlabel("Time window")
+    ax.set_ylabel("Std of pair connectivity")
+    ax.legend()
+
+    fig.tight_layout()
+    fig.savefig(out_dir / f"{subject}_variability.png", dpi=300)
+    plt.close(fig)
+
+
+def save_summary(subject, mean_values, variability):
+    out_dir = Path(config.SUMMARY_OUTPUT_DIR)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    mid = len(mean_values) // 2
+
+    first_half = np.mean(mean_values[:mid])
+    second_half = np.mean(mean_values[mid:])
+    delta = second_half - first_half
+
+    var_first = np.mean(variability[:mid])
+    var_second = np.mean(variability[mid:])
+
+    text = f"""
+Subject: {subject}
+============================================================
+
+Mean connectivity:
+    whole recording : {np.mean(mean_values):.6f}
+    first half      : {first_half:.6f}
+    second half     : {second_half:.6f}
+    delta           : {delta:.6f}
+
+Variability across electrode pairs:
+    first half      : {var_first:.6f}
+    second half     : {var_second:.6f}
+"""
+
+    with open(out_dir / f"{subject}_summary.txt", "w") as f:
+        f.write(text)
+
+    print(text)
+
+
+def run_subject(subject, subject_dir):
+    print(f"Processing {subject}")
+
+    connectivity = load_matrices(subject_dir)
+
+    mean_values, variability = compute_metrics(connectivity)
+
+    save_plot(subject, mean_values, variability)
+    save_summary(subject, mean_values, variability)
+
+    print(
+        f"Loaded connectivity for {subject}: "
+        f"{connectivity.shape[0]} windows, "
+        f"{connectivity.shape[1]} channels"
+    )
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
+def main():
+    args = parse_args()
+    subjects, subject_file_map = resolve_subjects(args)
+
+    for subject in subjects:
+        run_subject(subject, subject_file_map[subject])
+
+
+if __name__ == "__main__":
     with w.catch_warnings():
         w.simplefilter("ignore", RuntimeWarning)
         main()
