@@ -3,11 +3,11 @@ from pathlib import Path
 # ── Paths ─────────────────────────────────────────────────────────────────────
 BASE_DIR   = Path(__file__).resolve().parent
 DATA_DIR   = (BASE_DIR / "../../EEG/MS_data").resolve()
-OUTPUT_DIR = (BASE_DIR / "results").resolve()
-CORR_OUTPUT_DIR = Path("./corr_matrices")
+OUTPUT_DIR = (BASE_DIR / "../results").resolve()
+CORR_OUTPUT_DIR = Path( OUTPUT_DIR / "corr_matrices")
 VIDEO_OUTPUT_DIR = Path("./Corr_videos")
-SUMMARY_OUTPUT_DIR = Path("./Connectivity_summary")
-REGION_OUTPUT_DIR = Path("./Region_connectivity")
+SUMMARY_OUTPUT_DIR = Path(OUTPUT_DIR / "connectivity_summary")
+REGION_OUTPUT_DIR = Path(OUTPUT_DIR / "Region_connectivity")
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 DATA_TYPE    = "ica"
@@ -81,3 +81,19 @@ ALL_ELECTRODES = [
     'OI1h', 'OI2h',
     # 'EMG',   # intentionally excluded from EEG plots
 ]
+# ── Region colors ─────────────────────────────────────────────────────────────
+REGION_COLORS = {
+    "Frontal":   "#e07b8a",   # pink
+    "Central":   "#6abf8a",   # green
+    "Parietal":  "#7aaddc",   # blue
+    "Occipital": "#c99de0",   # purple
+    "Temporal":  "#e0b86a",   # amber
+    "Reference": "#a0a0a0",   # grey
+}
+ 
+# ── Hemisphere colors ─────────────────────────────────────────────────────────
+HEMISPHERE_COLORS = {
+    "left":    "#7aaddc",   # blue
+    "right":   "#e07b8a",   # pink
+    "midline": "#a0a0a0",   # grey
+}
