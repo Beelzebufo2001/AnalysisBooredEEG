@@ -3,7 +3,6 @@
 # =============================================================================
 # IMPORTS
 # =============================================================================
-import os
 import sys
 import argparse
 from pathlib import Path
@@ -22,14 +21,10 @@ import config
 # =============================================================================
 def parse_args():
     parser = argparse.ArgumentParser(description="Connectivity analysis pipeline")
-
     parser.add_argument(
         "--subjects", nargs="+", default=None,
-        help="Subject IDs to process (e.g. C01 C02 C03). "
-             "Defaults to all folders matching SUBJECT_GLOB in CORR_OUTPUT_DIR.",
+        help="Subject IDs to process (e.g. C01 C02 C03).",
     )
-    
-
     return parser.parse_args()
 
 
@@ -37,189 +32,114 @@ def parse_args():
 # HELPERS
 # =============================================================================
 def load_matrices(subject_dir):
-    """
-    Load all .npy correlation matrices for one subject.
-
-    Returns
-    -------
-    connectivity : ndarray
-        Shape: (time, channels, channels)
-    """
+    """Load all .npy correlation matrices, return (T, N, N) array."""
     files = sorted(subject_dir.glob("*.npy"))
     if not files:
         raise FileNotFoundError(f"No .npy files found in {subject_dir}")
-
-    matrices = [np.load(f) for f in files]
-    connectivity = np.stack(matrices)  # TIME, MATRIX
-
-    return connectivity
+    return np.stack([np.load(f) for f in files])
 
 
 def resolve_subjects(args):
-    """
-    Return list of subject IDs and mapping subject -> directory
-    """
     corr_dir = Path(config.CORR_OUTPUT_DIR)
-    print(f"Openning correlation matrices directory in: {corr_dir}")
-
     if not corr_dir.exists():
-        print(f"ERROR: Correlation directory not found: {corr_dir}", file=sys.stderr)
+        print(f"ERROR: {corr_dir} not found", file=sys.stderr)
         sys.exit(1)
 
     discovered = {
-        subject_dir.name: subject_dir
-        for subject_dir in sorted(corr_dir.iterdir())
-        if subject_dir.is_dir()
+        d.name: d for d in sorted(corr_dir.iterdir()) if d.is_dir()
     }
-
     if not discovered:
-        print(f"ERROR: No subject folders found in {corr_dir}", file=sys.stderr)
+        print(f"ERROR: No subject folders in {corr_dir}", file=sys.stderr)
         sys.exit(1)
 
     if args.subjects is None:
-        subjects = list(discovered.keys())
-    else:
-        missing = [s for s in args.subjects if s not in discovered]
-        if missing:
-            print(
-                f"ERROR: Requested subjects not found: {missing}",
-                file=sys.stderr
-            )
-            sys.exit(1)
+        return list(discovered.keys()), discovered
 
-        subjects = args.subjects
+    missing = [s for s in args.subjects if s not in discovered]
+    if missing:
+        print(f"ERROR: Subjects not found: {missing}", file=sys.stderr)
+        sys.exit(1)
 
-    return subjects, discovered
+    return args.subjects, discovered
 
 
 def compute_metrics(connectivity):
-    """
-    Compute:
-    - mean connectivity over time
-    - variability over time
-    """
-    upper_indices = np.triu_indices(connectivity.shape[1], k=1)
-
-    mean_values = []
-    variability = []
-
-    for matrix in connectivity:
-        pair_vals = matrix[upper_indices]
-
-        mean_values.append(np.mean(pair_vals))
-        variability.append(np.std(pair_vals))
-
-    return np.array(mean_values), np.array(variability)
+    upper = np.triu_indices(connectivity.shape[1], k=1)
+    mean_values = np.array([np.mean(m[upper]) for m in connectivity])
+    variability = np.array([np.std(m[upper])  for m in connectivity])
+    return mean_values, variability
 
 
-def save_plot(subject, mean_values, variability):
-    out_dir = Path(config.SUMMARY_OUTPUT_DIR)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
+# =============================================================================
+# PLOT — one PNG per subject, two panels + stats in suptitle
+# =============================================================================
+def save_subject_figure(subject, mean_values, variability, out_dir):
     mid = len(mean_values) // 2
 
-    # -------------------------------------------------------------------------
-    # Mean connectivity plot
-    # -------------------------------------------------------------------------
-    fig, ax = plt.subplots(figsize=(10, 3))
+    first  = np.mean(mean_values[:mid])
+    second = np.mean(mean_values[mid:])
+    delta  = second - first
 
-    ax.plot(mean_values, color="darkmagenta", linewidth=2)
-    ax.axvline(mid, color="black", linestyle="--", label="Condition switch")
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6))
 
-    ax.set_title(f"Mean connectivity over time: {subject}")
-    ax.set_xlabel("Time window")
-    ax.set_ylabel("Mean connectivity")
-    ax.legend()
+    # ── panel 1: mean connectivity ────────────────────────────────────────────
+    ax1.plot(mean_values, color="darkmagenta", linewidth=1.5)
+    ax1.axvline(mid, color="black", linestyle="--", linewidth=1, label="Condition switch")
+    ax1.set_ylabel("Mean connectivity")
+    ax1.set_xlabel("Time window")
+    ax1.legend(fontsize=8)
+
+    # ── panel 2: variability ──────────────────────────────────────────────────
+    ax2.plot(range(mid),                   variability[:mid],  color="khaki",      label="Eyes open")
+    ax2.plot(range(mid, len(variability)), variability[mid:],  color="steelblue",  label="Eyes closed")
+    ax2.axvline(mid, color="black", linestyle="--", linewidth=1, label="Condition switch")
+    ax2.set_ylabel("Std of pair connectivity")
+    ax2.set_xlabel("Time window")
+    ax2.legend(fontsize=8)
+
+    # ── stats as suptitle ─────────────────────────────────────────────────────
+    fig.suptitle(
+        f"{subject}   |   "
+        f"mean={np.mean(mean_values):.4f}   "
+        f"eyes-open={first:.4f}   "
+        f"eyes-closed={second:.4f}   "
+        f"Δ={delta:+.4f}",
+        fontsize=10,
+    )
 
     fig.tight_layout()
-    fig.savefig(out_dir / f"{subject}_mean_connectivity.png", dpi=300)
-    plt.close(fig)
-
-    # -------------------------------------------------------------------------
-    # Variability plot
-    # -------------------------------------------------------------------------
-    fig, ax = plt.subplots(figsize=(10, 3))
-
-    ax.plot(
-        range(mid),
-        variability[:mid],
-        color="khaki",
-        label="Eyes open",
-    )
-
-    ax.plot(
-        range(mid, len(variability)),
-        variability[mid:],
-        color="powderblue",
-        label="Eyes closed",
-    )
-
-    ax.axvline(
-        mid,
-        color="red",
-        linestyle="--",
-        label="Condition switch"
-    )
-
-    ax.set_title(f"Variability across electrode pairs: {subject}")
-    ax.set_xlabel("Time window")
-    ax.set_ylabel("Std of pair connectivity")
-    ax.legend()
-
-    fig.tight_layout()
-    fig.savefig(out_dir / f"{subject}_variability.png", dpi=300)
+    fig.savefig(out_dir / f"{subject}.png", dpi=200)
     plt.close(fig)
 
 
-def save_summary(subject, mean_values, variability):
-    out_dir = Path(config.SUMMARY_OUTPUT_DIR)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    mid = len(mean_values) // 2
-
-    first_half = np.mean(mean_values[:mid])
-    second_half = np.mean(mean_values[mid:])
-    delta = second_half - first_half
-
-    var_first = np.mean(variability[:mid])
-    var_second = np.mean(variability[mid:])
-
-    text = f"""
-Subject: {subject}
-============================================================
-
-Mean connectivity:
-    whole recording : {np.mean(mean_values):.6f}
-    first half      : {first_half:.6f}
-    second half     : {second_half:.6f}
-    delta           : {delta:.6f}
-
-Variability across electrode pairs:
-    first half      : {var_first:.6f}
-    second half     : {var_second:.6f}
-"""
-
-    with open(out_dir / f"{subject}_summary.txt", "w") as f:
-        f.write(text)
-
-    print(text)
+# =============================================================================
+# SUMMARY — one PNG with delta bar chart across all subjects
+# =============================================================================
+def save_summary_figure(subjects, deltas, out_dir):
+    fig, ax = plt.subplots(figsize=(max(6, len(subjects) * 0.8), 4))
+    colors = ["steelblue" if d >= 0 else "tomato" for d in deltas]
+    ax.bar(subjects, deltas, color=colors)
+    ax.axhline(0, color="black", linewidth=0.8)
+    ax.set_title("Connectivity change: eyes-closed − eyes-open (Δ)")
+    ax.set_ylabel("Δ mean connectivity")
+    fig.tight_layout()
+    fig.savefig(out_dir / "summary_delta.png", dpi=200)
+    plt.close(fig)
 
 
-def run_subject(subject, subject_dir):
-    print(f"Processing {subject}")
-
+# =============================================================================
+# PER-SUBJECT
+# =============================================================================
+def run_subject(subject, subject_dir, out_dir):
     connectivity = load_matrices(subject_dir)
-
     mean_values, variability = compute_metrics(connectivity)
+    save_subject_figure(subject, mean_values, variability, out_dir)
 
-    save_plot(subject, mean_values, variability)
-    save_summary(subject, mean_values, variability)
+    mid   = len(mean_values) // 2
+    delta = float(np.mean(mean_values[mid:])) - float(np.mean(mean_values[:mid]))
 
-    print(
-        f"Loaded connectivity for {subject}: "
-        f"{connectivity.shape[0]} windows, "
-        f"{connectivity.shape[1]} channels"
-    )
+    print(f"  {subject}  windows={len(connectivity)}  delta={delta:+.4f}", flush=True)
+    return delta
 
 
 # =============================================================================
@@ -227,10 +147,23 @@ def run_subject(subject, subject_dir):
 # =============================================================================
 def main():
     args = parse_args()
-    subjects, subject_file_map = resolve_subjects(args)
+    subjects, subject_dir_map = resolve_subjects(args)
 
+    out_dir = Path(config.SUMMARY_OUTPUT_DIR)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    deltas = []
     for subject in subjects:
-        run_subject(subject, subject_file_map[subject])
+        try:
+            delta = run_subject(subject, subject_dir_map[subject], out_dir)
+            deltas.append((subject, delta))
+        except FileNotFoundError as e:
+            print(f"  [SKIP] {e}", flush=True)
+
+    if len(deltas) > 1:
+        save_summary_figure([s for s, _ in deltas], [d for _, d in deltas], out_dir)
+
+    print(f"\nDone. Results in: {out_dir.resolve()}", flush=True)
 
 
 if __name__ == "__main__":
