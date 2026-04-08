@@ -20,18 +20,6 @@ SUBJECTS=(
     C22 C23 C25 C26 C27
 )
 SUBJECT=(C01)
-# ── Setup ─────────────────────────────────────────────────────────────────────
-
-mkdir -p "$OUTPUT_DIR"
-mkdir -p /CSNG/roblikova/Scripts/logs
-
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate "$CONDA_ENV"
-
-echo "Python : $(which python)"
-echo "Env    : $CONDA_DEFAULT_ENV"
-echo ""
-
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 python "$SCRIPT" \

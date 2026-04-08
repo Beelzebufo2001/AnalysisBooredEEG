@@ -22,7 +22,7 @@
 # ── Edit these if needed ──────────────────────────────────────────────────────
 
 CONDA_ENV="BCenv"
-SCRIPT="/CSNG/roblikova/Scripts/01_plot_eeg.py"
+SCRIPT="/CSNG/roblikova/Scripts/01-PlotEEG.py"
 OUTPUT_DIR="/CSNG/roblikova/results/qc_plots"
 
 # ── Runtime ───────────────────────────────────────────────────────────────────

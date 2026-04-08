@@ -136,7 +136,7 @@ def ensure_dir_exists(dirpath: Path):
     dirpath = Path(dirpath)
     if not dirpath.is_dir():
         print(f"Creating {dirpath}")
-        dirpath.mkdir(parents=True, exist_ok=True)
+            dirpath.mkdir(parents=True, exist_ok=True)
 
 
 def get_valid_subjects_and_paths(preferred, folder_path=None, clean_alg=None, recording="RS_before"):

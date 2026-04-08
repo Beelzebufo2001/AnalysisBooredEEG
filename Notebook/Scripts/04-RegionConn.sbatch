@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=region_conn
-#SBATCH --partition=cpu
+# #SBATCH --partition=cpu
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
 #SBATCH --time=00:30:00
@@ -8,7 +8,7 @@
 #SBATCH --error=logs/region_conn_%j.err
 
 set -euo pipefail
-mkdir -p logs"
+mkdir -p logs
 
 echo "========================================"
 echo "  Job ID  : $SLURM_JOB_ID"
@@ -16,8 +16,16 @@ echo "  Node    : $(hostname)"
 echo "  Started : $(date)"
 echo "========================================"
 
-python 04-RegionConn.py --subjects C01 C02 C03
+python 04-RegionConn.py
 
 echo "========================================"
-echo "  Finished: $(date)"
+echo "  Finished auto: $(date)"
 echo "========================================"
+
+python 04-RegionConn.py --ylim default
+
+echo "========================================"
+echo "  Finished default: $(date)"
+echo "========================================"
+
+

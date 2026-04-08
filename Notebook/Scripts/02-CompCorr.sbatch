@@ -30,7 +30,7 @@
 # ── Edit these if needed ──────────────────────────────────────────────────────
 
 CONDA_ENV="BCenv"
-SCRIPT="/CSNG/roblikova/Scripts/02-CorrMatrices.py"
+SCRIPT="/CSNG/roblikova/Scripts/02-CompCorr.py"
 OUTPUT_DIR="/CSNG/roblikova/results/corr_matrices"
 
 # ── Subject list ──────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ OUTPUT_DIR="/CSNG/roblikova/results/corr_matrices"
 # --array=0-26 must match index 0 to (number of subjects - 1).
 
 SUBJECTS=(
-    C01 C02 C03 C04 C05
+    C02 C03 C04 C05
     C06 C07 C08 C09 C10
     C11 C12 C13 C14 C15
     C17 C18 C19 C20 C21
