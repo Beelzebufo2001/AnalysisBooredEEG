@@ -275,7 +275,7 @@ def run_subject(subject, file_path, args):
             stop=t_zero + window_samples
         )
 
-        processed = filter_and_downsample(
+        processed = filter_and_downsample( # toto se dela na kazde elektrode samostatne 
             snippet=snippet,
             old_freq=old_freq,
             new_freq=new_freq,

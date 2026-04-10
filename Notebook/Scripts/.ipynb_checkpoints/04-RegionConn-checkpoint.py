@@ -33,13 +33,14 @@ def parse_args():
     """
     TODOO: add posibility to select Ylim to printig pdf.
     """
+
     parser.add_argument(
         "--ylim",
-        nargs=2,
-        type=float,
-        metavar=("YMIN", "YMAX"),
-        default=getattr(config, "DEFAULT_YLIM", [-1.0, 1.0]),
-        help="Y-axis limits for mean connectivity plots. Default: -1 1",
+        nargs="*",
+        help=(
+            "Y-axis limits for mean connectivity plots. "
+            "Use nothing for auto, 'default' for config.DEFAULT_YLIM, or two numbers for custom range."
+        )
     )
 
     return parser.parse_args()
@@ -140,17 +141,16 @@ def build_region_indices(ch_names): # Same function as from paper
 
 
 def region_connectivity(connectivity, regionA, regionB):
-    """
-    goes over matrices and computes means and standard deviation over time
-    """
+    safeA = [i for i in regionA if i < connectivity.shape[1]]
+    safeB = [i for i in regionB if i < connectivity.shape[2]]
+    
     values = []
-    stds   = []
+    stds = []
     for matrix in connectivity:
-        vals = matrix[np.ix_(regionA, regionB)]
+        vals = matrix[np.ix_(safeA, safeB)]
         values.append(np.mean(vals))
         stds.append(np.std(vals))
     return np.array(values), np.array(stds)
-
 
 # =============================================================================
 # PLOTTING 1
@@ -299,7 +299,7 @@ def make_heatmap(avg_matrix, region_names, subject):
 # =============================================================================
 # PER-SUBJECT 2
 # =============================================================================
-def run_subject(subject, subject_dir, mean_ylim, std_ylim):
+def run_subject(subject, subject_dir, mean_ylim, std_ylim, ylim_tag):
     print(f"Processing {subject}")
 
     connectivity = load_matrices(subject_dir)
@@ -308,14 +308,6 @@ def run_subject(subject, subject_dir, mean_ylim, std_ylim):
 
     out_dir = Path(config.REGION_OUTPUT_DIR) / subject
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    # určení sufixu pro PDF podle ylim
-    if mean_ylim is None:
-        ylim_tag = "autoY"
-    elif mean_ylim == config.DEFAULT_YLIM:
-        ylim_tag = "defaultY"
-    else:
-        ylim_tag = f"{mean_ylim[0]}to{mean_ylim[1]}Y"
     
     pdf_path = out_dir / f"{subject}_connectivity_report_{ylim_tag}.pdf"
 
@@ -397,29 +389,30 @@ def run_subject(subject, subject_dir, mean_ylim, std_ylim):
 # MAIN
 # =============================================================================
 def main():
-    args = parse_args() # Look at arguments 
-    
-    subjects, subject_dir_map = resolve_subjects(args) # Get subjects from argument and all directories
+    args = parse_args()
+    subjects, subject_dir_map = resolve_subjects(args)
 
-    # mean_ylim = tuple(args.ylim)
-    # if mean_ylim is None:
-    #     mean_ylim = config.DEFAULT_YLIM
-    # #mean_ylim = tuple(args.ylim) if args.ylim is not None else config.DEFAULT_YLIM
-    # --- rozhodnutí o ylim ---
-    if args.ylim is None:
-        mean_ylim = None            # matplotlib si vybere automaticky
-    elif args.ylim == ["default"]:  # nebo jen string default
-        mean_ylim = config.DEFAULT_YLIM
+    # --- zpracování ylim ---
+    if args.ylim is None or len(args.ylim) == 0:
+        mean_ylim = None        # auto výběr podle dat
+        ylim_tag = "auto"
+    elif args.ylim[0].lower() == "default":
+        mean_ylim = tuple(config.DEFAULT_YLIM)
+        ylim_tag = "default"
     else:
-        mean_ylim = tuple(args.ylim)   # konkrétní hodnoty x, z
-        
-    for subject in subjects: # Just run it
+        if len(args.ylim) != 2:
+            print("ERROR: --ylim requires 2 numbers or 'default'", file=sys.stderr)
+            sys.exit(1)
+        mean_ylim = tuple(map(float, args.ylim))
+        ylim_tag = f"{mean_ylim[0]}to{mean_ylim[1]}Y"
+
+    std_ylim = config.DEFAULT_STD_YLIM
+
+    for subject in subjects:
         try:
-            #run_subject(subject, subject_dir_map[subject])
-            run_subject(subject,subject_dir_map[subject],mean_ylim,std_ylim=config.DEFAULT_STD_YLIM)
+            run_subject(subject, subject_dir_map[subject], mean_ylim, std_ylim, ylim_tag=ylim_tag)
         except FileNotFoundError as e:
             print(f"[SKIP] {e}", file=sys.stderr)
-
 
 if __name__ == "__main__":
     with w.catch_warnings():

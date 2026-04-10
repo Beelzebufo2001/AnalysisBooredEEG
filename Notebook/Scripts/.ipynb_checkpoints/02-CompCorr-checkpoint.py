@@ -104,7 +104,7 @@ def parse_args():
 def ensure_dir_exists(dirpath):
     dirpath = Path(dirpath)
     if not dirpath.exists():
-        print(f"Creating directory: {dirpath}")
+        print(f"Creating directory: {dirpath}", flush=True)
         dirpath.mkdir(parents=True, exist_ok=True)
 
 
@@ -133,9 +133,9 @@ def get_valid_subjects_and_paths(preferred, folder_path=None, clean_alg=None, re
     folder_path = Path(folder_path or config.DATA_DIR)
     clean_alg = clean_alg or config.DATA_TYPE
 
-    print(f"Discovering subjects in: {folder_path}")
-    print(f"Cleaning algorithm: {clean_alg}")
-    print(f"Recording: {recording}")
+    print(f"Discovering subjects in: {folder_path}", flush=True)
+    print(f"Cleaning algorithm: {clean_alg}", flush=True)
+    print(f"Recording: {recording}", flush=True)
 
     subjects = []
     file_paths = []
@@ -154,7 +154,7 @@ def get_valid_subjects_and_paths(preferred, folder_path=None, clean_alg=None, re
 
         clean_dir = subject_dir / clean_alg
         if not clean_dir.is_dir():
-            print(f"Skipping {subject}: missing folder {clean_dir}")
+            print(f"Skipping {subject}: missing folder {clean_dir}", flush=True)
             continue
 
         matching_files = sorted(
@@ -171,14 +171,14 @@ def get_valid_subjects_and_paths(preferred, folder_path=None, clean_alg=None, re
         )
 
         if not matching_files:
-            print(f"Skipping {subject}: no matching .fif file for {recording}")
+            print(f"Skipping {subject}: no matching .fif file for {recording}", flush=True)
             continue
 
         chosen = matching_files[0]
         subjects.append(subject)
         file_paths.append(chosen)
 
-        print(f"Adding {subject}: {chosen.name}")
+        print(f"Adding {subject}: {chosen.name}", flush=True)
 
     return subjects, file_paths
 
@@ -198,7 +198,7 @@ def resolve_subjects(args):
     if preferred != "all":
         missing = [s for s in preferred if s not in subject_file_map]
         if missing:
-            print(f"ERROR: Subjects not found or missing files: {missing}", file=sys.stderr)
+            print(f"ERROR: Subjects not found or missing files: {missing}", file=sys.stderr, flush=True)
             sys.exit(1)
 
     return subjects, subject_file_map
@@ -236,10 +236,10 @@ def filter_and_downsample(snippet, old_freq, new_freq, highpass, lowpass):
 # PER SUBJECT
 # =============================================================================
 def run_subject(subject, file_path, args):
-    print("=" * 60)
-    print(f"Subject: {subject}")
-    print(f"File: {file_path}")
-    print("=" * 60)
+    print("=" * 60, flush=True)
+    print(f"Subject: {subject}", flush=True)
+    print(f"File: {file_path}", flush=True)
+    print("=" * 60, flush=True)
 
     raw = load_raw_file(file_path)
 
@@ -257,12 +257,12 @@ def run_subject(subject, file_path, args):
     ensure_dir_exists(out_dir)
 
     total_duration = n_samples / old_freq
-    print(f"Sampling rate: {old_freq} Hz")
-    print(f"Recording length: {total_duration:.2f} s")
-    print(f"Window length: {len_snippet} s")
-    print(f"Step: {step} s")
-    print(f"Bandpass: {args.highpass}-{args.lowpass} Hz")
-    print(f"Downsampling to: {new_freq} Hz")
+    print(f"Sampling rate: {old_freq} Hz", flush=True)
+    print(f"Recording length: {total_duration:.2f} s", flush=True)
+    print(f"Window length: {len_snippet} s", flush=True)
+    print(f"Step: {step} s", flush=True)
+    print(f"Bandpass: {args.highpass}-{args.lowpass} Hz", flush=True)
+    print(f"Downsampling to: {new_freq} Hz", flush=True)
 
     t_zero = 0
     window_count = 0
@@ -288,19 +288,19 @@ def run_subject(subject, file_path, args):
         out_file = out_dir / f"corr_{t_sec:04d}.npy"
 
         if args.dry_run:
-            print(f"[DRY RUN] Would save: {out_file}")
+            print(f"[DRY RUN] Would save: {out_file}", flush=True)
         else:
             np.save(out_file, matrix)
-            print(f"Saved: {out_file}")
+            print(f"Saved: {out_file}", flush=True)
 
         t_zero += step_samples
         window_count += 1
 
         if args.max_windows is not None and window_count >= args.max_windows:
-            print(f"Reached max windows: {args.max_windows}")
+            print(f"Reached max windows: {args.max_windows}", flush=True)
             break
 
-    print(f"Finished {subject}: {window_count} matrices created.")
+    print(f"Finished {subject}: {window_count} matrices created.", flush=True)
 
 
 # =============================================================================
