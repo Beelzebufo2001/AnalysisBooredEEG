@@ -43,6 +43,16 @@ def parse_args():
         default=config.DEFAULT_SFREQ,
         help="Directory where output matrices will be saved."
     )
+    parser.add_argument(
+        "--lim-epochs",
+        type=int,
+        default=config.DEFAULT_EPOCH
+    )
+    parser.add_argument(
+        "--lim-cutoff",
+        type=int,
+        default = config.DEFAULT_LMCUTT
+    )
 
 # =============================================================================
 # HELPERS
@@ -147,23 +157,92 @@ def resolve_subjects(args):
             sys.exit(1)
 
     return subjects, subject_file_map
+# =============================================================================
+# PLOTING & SAVING
+# =============================================================================
+def plot_topomap(raw_crop, data, corr, bridged_idx, ed_matrix, subject_id="unknown", seconds, new_freq):
+    # want to create dictionary
+    return fig
+    
+def plot_correlation(corr, subject_id = "unknown", seconds, new_freq):
+    fig, ax = plt.subplots(figsize=(8, 6))
+    im = ax.imshow(corr, vmin=-1, vmax=1, cmap='coolwarm')
+    ax.set_title(f"Korelační matice EEG kanálů\nSubject: {subject_id} | posledních {seconds}s | {new_freq}Hz", fontsize=12)
+    ax.set_xlabel("Kanál #")
+    ax.set_ylabel("Kanál #")
+    plt.colorbar(im, ax=ax, label="Pearsonova korelace")
+    plt.tight_layout()
+    plt.savefig(f"corr_matrix_{subject}.png", dpi=150)
+    return fig
 
+def plot_distribution(ed_matrix):
+    fig, ax = plt.subplots(figsize=(5, 5))
+    fig.suptitle("Subject 6 Electrical Distance Matrix Distribution")
+    ax.hist(ed_matrix[~np.isnan(ed_matrix)], bins=np.linspace(0, 500, 51))
+    ax.set_xlabel(r"Electrical Distance ($\mu$$V^2$)")
+    ax.set_ylabel("Count (channel pairs for all epochs)")
+    return fig
+    
 # =============================================================================
 # PER SUBJECT
 # =============================================================================
 def run_subject(subject, subject_path, args):
     raw = load_raw_file(subject_pathct)
 
-    #Cropping X second before
+    #-------Cropping X second before-------
     tmax = raw.times[-1]
     seconds = args.lenght
-    if(secondso > tmax):
+    if(seconds > tmax): # rovno means we dont care...
         print("", flush=True)
         exit(1):
     tmin = tmax - seconds
     
-    raw_croped = raw.copy().crop(tmin=tmin, tmax=tmax)
+    raw_crop = raw.copy().crop(tmin=tmin, tmax=tmax)
+
+    #-------Only EEG but do we care ? 
+    raw_crop = raw_crop.pick_types(eeg=True)
     
+    #-------Downsample 
+    new_freq = args.target_freq
+    raw_crop.resample(new_freq) #what if bigger
+
+    #-------Correlation if we want
+    data = raw_crop.get_data()
+    corr = np.corrcoef(data)
+
+    #-------Bridges issues 
+    lc = args.lim_cutoff
+    et = args.lim_epoch
+    bridged_idx, ed_matrix = mne.preprocessing.compute_bridged_electrodes(
+        raw_crop,
+        verbose = False,
+        lm_cutoff = lc,
+        epoch_treshold = et
+    )
+    #-------Ploting 
+    out_dir = args.out_dir / subject
+    out_dir.mkdir(parents = True, exist_ok = True)
+
+    tag = "t" + seconds + "-lc" + lc + "-et" + et
+    pdf_path = out_dir / f"{subject}_Bridges_{tag}.pdf"
+    with PdfPages(pdf_path) as pdf:
+        
+        plot_top = plot_topomap(raw_crop, corr, data, bridged_idx, ed_matrix, seconds, new_freq)
+        pdf.savefig(plot_top)
+        plt.close(plot_top)
+        
+        plot_corr = plot_correlation(corr, subject_id = subject, seconds, new_freq)
+        pdf.savefig(plot_corr)
+        plt.close(plot_corr)
+        
+        plot_dis = plot_distribution(ed_matrix)
+        pdf.savefig(plot_dis)
+        plt.close(plot_dis)
+        
+        
+        plt.close(plot_top, plot_corr)
+    
+    print(f"  Finished {subject} | saved to {pdf_path}", flush=True)
     
 # =============================================================================
 # MAIN

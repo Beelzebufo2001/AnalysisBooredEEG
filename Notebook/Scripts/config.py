@@ -106,3 +106,5 @@ HEMISPHERE_COLORS = {
 # ── Bridges ─────────────────────────────────────────────────────────
 DEFAULT_BRIDGE = 10 # ten seconds before ending 
 DEFAULT_FREQ = 100 # default downsample of data
+DEFAULT_EPOCH = 0.2 # df i understand, IN how manny epoch must ed be less then lmcutoff to say that they are bridget ?
+DEFAULT_LMCUTT = 16 # the less the au au 
