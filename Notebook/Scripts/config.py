@@ -103,3 +103,6 @@ HEMISPHERE_COLORS = {
     "right":   "#e07b8a",   # pink
     "midline": "#a0a0a0",   # grey
 }
+# ── Bridges ─────────────────────────────────────────────────────────
+DEFAULT_BRIDGE = 10 # ten seconds before ending 
+DEFAULT_FREQ = 100 # default downsample of data
