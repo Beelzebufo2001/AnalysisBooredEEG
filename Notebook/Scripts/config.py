@@ -104,7 +104,9 @@ HEMISPHERE_COLORS = {
     "midline": "#a0a0a0",   # grey
 }
 # ── Bridges ─────────────────────────────────────────────────────────
-DEFAULT_BRIDGE = 10 # ten seconds before ending 
-DEFAULT_FREQ = 100 # default downsample of data
-DEFAULT_EPOCH = 0.2 # df i understand, IN how manny epoch must ed be less then lmcutoff to say that they are bridget ?
-DEFAULT_LMCUTT = 16 # the less the au au 
+DEFAULT_BRIDGE = 60 # ten seconds before ending 
+DEFAULT_SFREQ = 100 # default downsample of data
+DEFAULT_EPOCH = 0.5 
+#Epoch treshold: jak často se něco musí dít v čase aby to bylo podezřelé. JE to stabilita v čase na procentech
+DEFAULT_LMCUTT = 5
+#Prostorový treshold: říká nám jak malý může být ED než nám to začne být podezřelé. FUnguje čistě na hodnoty mezi elektrodami

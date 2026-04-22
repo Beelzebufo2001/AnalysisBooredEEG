@@ -1,4 +1,4 @@
-#!/bin/bash
+i#!/bin/bash
 #SBATCH --job-name=compute_conn
 #SBATCH -c 2
 #SBATCH --mem=8G

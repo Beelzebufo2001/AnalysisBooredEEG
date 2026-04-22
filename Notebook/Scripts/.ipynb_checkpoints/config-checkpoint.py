@@ -19,6 +19,8 @@ DEFAULT_T_MAX            = 1
 DEFAULT_SINGLE_ELECTRODE = "Cz"   # used when --electrode is not specified
 FIGSIZE_WIDE             = (15, 5)
 DEFAULT_DPI              = 200
+DEFAULT_YLIM = (-1.0, 1.0)
+DEFAULT_STD_YLIM = (0.0, 1.0)
 
 # BUG FIX 6: MNE montage names are case-sensitive — must be lowercase 's'
 DEFAULT_MONTAGE = "standard_1005"
@@ -89,6 +91,10 @@ REGION_COLORS = {
     "Occipital": "#c99de0",   # purple
     "Temporal":  "#e0b86a",   # amber
     "Reference": "#a0a0a0",   # grey
+    "left":    "#7aaddc",   # blue
+    "right":   "#e07b8a",   # pink
+    "midline": "#a0a0a0",   # grey
+
 }
  
 # ── Hemisphere colors ─────────────────────────────────────────────────────────
@@ -97,3 +103,10 @@ HEMISPHERE_COLORS = {
     "right":   "#e07b8a",   # pink
     "midline": "#a0a0a0",   # grey
 }
+# ── Bridges ─────────────────────────────────────────────────────────
+DEFAULT_BRIDGE = 60 # ten seconds before ending 
+DEFAULT_SFREQ = 100 # default downsample of data
+DEFAULT_EPOCH = 0.5 
+#Epoch treshold: jak často se něco musí dít v čase aby to bylo podezřelé. JE to stabilita v čase na procentech
+DEFAULT_LMCUTT = 5
+#Prostorový treshold: říká nám jak malý může být ED než nám to začne být podezřelé. FUnguje čistě na hodnoty mezi elektrodami
