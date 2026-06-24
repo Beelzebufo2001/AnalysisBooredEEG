@@ -1,0 +1,16 @@
+Pozor na edgecase u C08 jako u ostatnich
+
+(BCenv) roblikova@wintermute:/CSNG/roblikova/LaStupido$ for d in /CSNG/EEG/MS_data/C*/ica; do
+    count=$(ls "$d"/*RS_before* 2>/dev/null | grep -v "\-1\.fif" | wc -l)
+    if [ "$count" -gt 1 ]; then
+        echo "$d: $count files"
+    fi
+done
+/CSNG/EEG/MS_data/C08/ica: 2 files
+/CSNG/EEG/MS_data/C12/ica: 2 files
+
+so discard electrodes only when the mean of one electrode corelates to the others at least as mean of them : mean of column or row for 
+nan is for empedance :: impedance more than  30 then whole collumn becomes nan 
+code in utils. load costum to remocve impedance 
+ - low is good low is one electrode with head 
+
