@@ -28,7 +28,7 @@ echo "Script      : ${PYTHON_SCRIPT}"
 echo "Arguments   : $*"
 echo "=========================================="
 
-python -u "${PYTHON_SCRIPT}" 
+python -u "${PYTHON_SCRIPT}" --recording RS_after
 
 echo "=========================================="
 echo "End time    : $(date)"

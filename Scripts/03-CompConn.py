@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+ 
 # =============================================================================
 # IMPORTS
 # =============================================================================
@@ -8,15 +8,15 @@ import json
 import argparse
 from pathlib import Path
 import warnings as w
-
+ 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-
+ 
 import config
-
-
+ 
+ 
 # =============================================================================
 # CLI
 # =============================================================================
@@ -25,28 +25,28 @@ def parse_args():
         description="Connectivity analysis — navigates results/<matrix_type>/<subject>/<recording>/<params>/",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-
+ 
     parser.add_argument(
         "--matrix-type",
         default="corr_matrices",
         choices=["corr_matrices", "plv_matrices"],
         help="Which matrix folder to read from.",
     )
-
+ 
     parser.add_argument(
         "--subjects",
         nargs="+",
         default=None,
         help="Subject IDs (e.g. C01 C02). Default: all found.",
     )
-
+ 
     parser.add_argument(
         "--recording",
         default="RS_before",
         choices=["RS_before", "Task", "RS_after"],
         help="Which recording to use.",
     )
-
+ 
     parser.add_argument(
         "--params",
         default=None,
@@ -57,22 +57,32 @@ def parse_args():
             "Use --list-params to discover available folders."
         ),
     )
-
+ 
     parser.add_argument(
         "--list-params",
         action="store_true",
         help="Print all available parameter folders and exit.",
     )
-
+ 
     parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print what would be processed, do not save anything.",
     )
-
+ 
+    parser.add_argument(
+        "--ylim",
+        nargs="*",
+        help=(
+            "Y-axis limits for mean connectivity plots. "
+            "Use nothing for auto, 'default' for config.DEFAULT_YLIM, "
+            "or two numbers for custom range, e.g. --ylim -0.5 1.0"
+        ),
+    )
+ 
     return parser.parse_args()
-
-
+ 
+ 
 # =============================================================================
 # DISCOVERY
 # =============================================================================
@@ -82,58 +92,55 @@ def get_matrix_root(matrix_type):
         print(f"ERROR: Matrix directory not found: {root}", file=sys.stderr)
         sys.exit(1)
     return root
-
-
+ 
+ 
 def discover_subjects(root, requested):
     found = {d.name: d for d in sorted(root.iterdir()) if d.is_dir() and d.name.startswith("C")}
     if not found:
         print(f"ERROR: No subject folders in {root}", file=sys.stderr)
         sys.exit(1)
-
+ 
     if requested is None:
         return list(found.keys()), found
-
+ 
     missing = [s for s in requested if s not in found]
     if missing:
         print(f"ERROR: Subjects not found: {missing}", file=sys.stderr)
         sys.exit(1)
-
+ 
     return requested, {s: found[s] for s in requested}
-
-
+ 
+ 
 def resolve_param_folder(subject_dir, recording, params_arg):
-    """
-    Return the resolved param folder Path for one subject/recording,
-    or None if missing.
-    """
+    """Return the resolved param folder Path for one subject/recording, or None."""
     rec_dir = subject_dir / recording
     if not rec_dir.exists():
         print(f"  [SKIP] {subject_dir.name}: no recording folder '{recording}'")
         return None
-
+ 
     available = sorted([d for d in rec_dir.iterdir() if d.is_dir()])
     if not available:
         print(f"  [SKIP] {subject_dir.name}/{recording}: no parameter folders found")
         return None
-
+ 
     if params_arg is not None:
         target = rec_dir / params_arg
         if not target.exists():
             print(f"  [SKIP] {subject_dir.name}/{recording}: folder '{params_arg}' not found")
             return None
         return target
-
+ 
     # Auto-select if unambiguous
     if len(available) == 1:
         return available[0]
-
+ 
     print(
         f"  [SKIP] {subject_dir.name}/{recording}: multiple param folders found, "
         f"specify --params. Options: {[d.name for d in available]}"
     )
     return None
-
-
+ 
+ 
 def list_all_params(root, recording):
     print(f"\nAvailable parameter folders under {root} / <subject> / {recording}:\n")
     for subject_dir in sorted(root.iterdir()):
@@ -145,7 +152,36 @@ def list_all_params(root, recording):
         folders = sorted([d.name for d in rec_dir.iterdir() if d.is_dir()])
         print(f"  {subject_dir.name}: {folders}")
     print()
-
+ 
+ 
+# =============================================================================
+# YLIM RESOLUTION
+# =============================================================================
+def resolve_ylim(ylim_arg, matrix_type):
+    """
+    Parse --ylim into (mean_ylim, ylim_tag).
+ 
+    --ylim              (nothing)  → auto, tag='auto'
+    --ylim default                 → config.DEFAULT_YLIM, tag='default'
+    --ylim -0.5 1.0                → (-0.5, 1.0), tag='-0.5to1.0'
+    """
+    if ylim_arg is None or len(ylim_arg) == 0:
+        return None, "auto"
+ 
+    if ylim_arg[0].lower() == "default":
+        if matrix_type == "plv_matrices":
+            return tuple(config.DEFAULT_PLV_YLIM), "default"
+        return tuple(config.DEFAULT_YLIM), "default"   # corr_matrices + any future type     
+ 
+    if len(ylim_arg) != 2:
+        print("ERROR: --ylim requires 0, 1 ('default'), or 2 numeric arguments.", file=sys.stderr)
+        sys.exit(1)
+ 
+    ylim = tuple(map(float, ylim_arg))
+    tag  = f"{ylim[0]:g}to{ylim[1]:g}"
+    return ylim, tag
+ 
+ 
 
 # =============================================================================
 # DATA LOADING
@@ -179,7 +215,7 @@ def compute_metrics(connectivity):
 # =============================================================================
 # PLOTS
 # =============================================================================
-def save_subject_figure(subject, mean_values, variability, out_dir, params_name, matrix_type):
+def save_subject_figure(subject, mean_values, variability, out_dir, params_name, matrix_type, mean_ylim, ylim_tag):
     mid    = len(mean_values) // 2
     first  = np.mean(mean_values[:mid])
     second = np.mean(mean_values[mid:])
@@ -191,6 +227,8 @@ def save_subject_figure(subject, mean_values, variability, out_dir, params_name,
     ax1.axvline(mid, color="black", linestyle="--", linewidth=1, label="Midpoint")
     ax1.set_ylabel("Mean connectivity")
     ax1.set_xlabel("Time window")
+    if mean_ylim is not None:
+        ax1.set_ylim(mean_ylim)
     ax1.legend(fontsize=8)
 
     ax2.plot(range(mid),                   variability[:mid],  color="khaki",     label="First half")
@@ -198,6 +236,8 @@ def save_subject_figure(subject, mean_values, variability, out_dir, params_name,
     ax2.axvline(mid, color="black", linestyle="--", linewidth=1)
     ax2.set_ylabel("Std of pair connectivity")
     ax2.set_xlabel("Time window")
+    if mean_ylim is not None:
+        ax2.set_ylim(config.DEFAULT_STD_YLIM)
     ax2.legend(fontsize=8)
 
     fig.suptitle(
@@ -208,13 +248,13 @@ def save_subject_figure(subject, mean_values, variability, out_dir, params_name,
     )
     fig.tight_layout()
 
-    out_path = out_dir / f"{subject}.png"
+    out_path = out_dir / f"{subject}_ylim-{ylim_tag}.png"
     fig.savefig(out_path, dpi=200)
     plt.close(fig)
     print(f"  Saved: {out_path}")
 
 
-def save_summary_figure(subjects, deltas, out_dir, params_name, matrix_type):
+def save_summary_figure(subjects, deltas, out_dir, params_name, matrix_type, ylim_tag):
     fig, ax = plt.subplots(figsize=(max(6, len(subjects) * 0.8), 4))
     colors = ["steelblue" if d >= 0 else "tomato" for d in deltas]
     ax.bar(subjects, deltas, color=colors)
@@ -224,7 +264,7 @@ def save_summary_figure(subjects, deltas, out_dir, params_name, matrix_type):
     fig.tight_layout()
 
     # Name the summary after the parameters so multiple runs don't overwrite
-    out_path = out_dir / f"summary_delta__{params_name}.png"
+    out_path = out_dir / f"summary_delta__{params_name}__ylim-{ylim_tag}.png"
     fig.savefig(out_path, dpi=200)
     plt.close(fig)
     print(f"\n  Summary saved: {out_path}")
@@ -233,10 +273,11 @@ def save_summary_figure(subjects, deltas, out_dir, params_name, matrix_type):
 # =============================================================================
 # PER-SUBJECT
 # =============================================================================
-def run_subject(subject, param_dir, out_dir, params_name, matrix_type):
+def run_subject(subject, param_dir, out_dir, params_name, matrix_type, mean_ylim, ylim_tag):
     connectivity         = load_matrices(param_dir)
     mean_values, variability = compute_metrics(connectivity)
-    save_subject_figure(subject, mean_values, variability, out_dir, params_name, matrix_type)
+    save_subject_figure(subject, mean_values, variability, out_dir,
+                        params_name, matrix_type, mean_ylim, ylim_tag)
 
     mid   = len(mean_values) // 2
     delta = float(np.mean(mean_values[mid:])) - float(np.mean(mean_values[:mid]))
@@ -258,9 +299,10 @@ def main():
 
     subjects, subject_dir_map = discover_subjects(root, args.subjects)
 
-    # Output goes to:
-    #   results/connectivity_summary/<matrix_type>/<recording>/<params>/
-    # so different parameter runs are fully separated and never overwrite.
+    mean_ylim, ylim_tag = resolve_ylim(args.ylim, args.matrix_type)
+
+# Output goes to: results/connectivity_summary/<matrix_type>/<recording>/<params>/ 
+# so different parameter runs are fully separated and never overwrite.
     params_label = args.params or "auto"
     out_dir = (
         config.SUMMARY_OUTPUT_DIR
@@ -297,7 +339,10 @@ def main():
             continue
 
         try:
-            delta = run_subject(subject, param_dir, out_dir, param_dir.name, args.matrix_type)
+            delta = run_subject(
+                subject, param_dir, out_dir, param_dir.name,
+                args.matrix_type, mean_ylim, ylim_tag,
+            )
             deltas.append((subject, delta))
         except FileNotFoundError as e:
             print(f"  [SKIP] {e}", flush=True)
@@ -309,6 +354,7 @@ def main():
             out_dir,
             params_name,
             args.matrix_type,
+            ylim_tag
         )
 
     print(f"\nDone. Results in: {out_dir.resolve()}", flush=True)

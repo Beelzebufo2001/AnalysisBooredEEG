@@ -47,7 +47,7 @@ echo ""
 # Runs on all subjects, RS_before recording, all plot modes, default electrode Cz.
 # To change: add --subject C01 C02, --electrode Fz, --mode single, --t-min 10 --t-max 20, etc.
 python "$SCRIPT" \
-    --recording  RS_before \
+    --recording  RS_after \
     --mode       all \
     --output-dir "$OUTPUT_DIR"
 

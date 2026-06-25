@@ -30,6 +30,7 @@ RULES=(
     "--exclude=.ipynb_checkpoints/"
     "--exclude=__pycache__/"
     "--exclude=*.pyc"
+    "--exclude=Scripts/logs/"
 
     # ── Include everything remaining inside the allowed folders ───────────────
     "--include=Scripts/**"

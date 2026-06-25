@@ -1,5 +1,5 @@
-i#!/bin/bash
-#SBATCH --job-name=compute_conn
+#!/bin/bash
+#SBATCH --job-name=03compute_conn
 #SBATCH -c 4
 #SBATCH --mem=8G
 #SBATCH --time=00:30:00
@@ -23,16 +23,18 @@ echo "========================================"
 
 # ── run ───────────────────────────────────────────────────────────────────────
 # See what param folders exist before picking one
-python 03_analyze_connectivity.py --list-params
+#python -u 03-CompConn.py --list-params
 
 # Run on all subjects, RS_before, specific params
-python -u 03_analyze_connectivity.py \
-    --matrix-type corr_matrices \
-    --recording RS_before \
-    --params sf250_win10_step1_bp1-45
+#python -u 03-CompConn.py \
+#    --matrix-type corr_matrices \
+#    --recording RS_before \
+#    --params sf250_win10_step1_bp1-45
 
 # Compare plv vs corr — run twice, outputs go to separate folders
-#python 03_analyze_connectivity.py --matrix-type plv_matrices --params sf250_win10_step1_bp1-45
+python -u 03-CompConn.py --matrix-type plv_matrices --params sf250_win10_step1_bp1-45 --recording RS_before --ylim default
+
+python -u 03-CompConn.py --matrix-type corr_matrices --params sf250_win10_step1_bp1-45 --recording RS_before --ylim default
 
 # Just a few subjects
 #python 03_analyze_connectivity.py --subjects C01 C03 --params sf250_win10_step1_bp1-45

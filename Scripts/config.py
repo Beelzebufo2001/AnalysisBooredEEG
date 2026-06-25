@@ -21,6 +21,7 @@ FIGSIZE_WIDE             = (15, 5)
 DEFAULT_DPI              = 200
 DEFAULT_YLIM = (-1.0, 1.0)
 DEFAULT_STD_YLIM = (0.0, 1.0)
+DEFAULT_PLV_YLIM = (0.0, 1.0)
 
 # BUG FIX 6: MNE montage names are case-sensitive — must be lowercase 's'
 DEFAULT_MONTAGE = "standard_1005"

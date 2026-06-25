@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=
+#SBATCH --job-name=connRSafter
 #SBATCH --array=0-26
 #SBATCH --mem=16G
 #SBATCH --time=00:30:00
@@ -57,8 +57,8 @@ echo ""
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 
-python "$SCRIPT" \
-    --recording RS_before \
+python -u "$SCRIPT" \
+    --recording RS_after \
     --output-dir "$OUTPUT_DIR"
 
 EXIT_CODE=$?
