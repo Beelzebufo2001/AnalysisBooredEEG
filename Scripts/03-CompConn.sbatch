@@ -1,6 +1,6 @@
 i#!/bin/bash
 #SBATCH --job-name=compute_conn
-#SBATCH -c 2
+#SBATCH -c 4
 #SBATCH --mem=8G
 #SBATCH --time=00:30:00
 
@@ -20,15 +20,22 @@ echo "========================================"
 
 # ── subject list ──────────────────────────────────────────────────────────────
 # Set SUBJECTS env var at submit time, or let the script auto-discover them.
-SUBJECTS="${SUBJECTS:-}"   # empty → auto-discover via SUBJECT_GLOB in config.py
 
 # ── run ───────────────────────────────────────────────────────────────────────
-if [[ -n "$SUBJECTS" ]]; then
-    # shellcheck disable=SC2086  # intentional word-splitting on $SUBJECTS
-    python analyze_connectivity.py --subjects $SUBJECTS
-else
-    python 03-CompConn.py
-fi
+# See what param folders exist before picking one
+python 03_analyze_connectivity.py --list-params
+
+# Run on all subjects, RS_before, specific params
+python -u 03_analyze_connectivity.py \
+    --matrix-type corr_matrices \
+    --recording RS_before \
+    --params sf250_win10_step1_bp1-45
+
+# Compare plv vs corr — run twice, outputs go to separate folders
+#python 03_analyze_connectivity.py --matrix-type plv_matrices --params sf250_win10_step1_bp1-45
+
+# Just a few subjects
+#python 03_analyze_connectivity.py --subjects C01 C03 --params sf250_win10_step1_bp1-45
 
 echo "=========================================="
 echo " Finished: $(date '+%Y-%m-%d %H:%M:%S')"
