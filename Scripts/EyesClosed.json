@@ -1,0 +1,42 @@
+{
+  "_comment": "ec_start_s = seconds from t=0 of raw file where eyes-closed begins.",
+  "_comment2": "null = unknown, use recording midpoint as fallback.",
+  "_comment3": "excluded=true = skip this subject/recording entirely.",
+
+  "C01": { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } },
+  "C02": { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null }, "note": "Check impedance" },
+  "C03": {
+    "excluded": false,
+    "RS_before": { "ec_start_s": null },
+    "RS_after":  { "excluded": true },
+    "note": "Before good, two el. broken AF"
+  },
+  "C04": { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null }, "note": "O12H inf impedance" },
+  "C05": { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null }, "note": "Noisy room" },
+  "C06": { "RS_before": { "ec_start_s": 310  }, "RS_after": { "ec_start_s": null }, "note": "BF movements, AF 7:20 light off" },
+  "C07": { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null }, "note": "AF ar 7m noise" },
+  "C08": {
+    "RS_before": { "excluded": true },
+    "RS_after":  { "ec_start_s": null },
+    "note": "BF 8knock 9noise"
+  },
+  "C09":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } },
+  "C10":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } },
+  "C11":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null }, "note": "Strong alpha" },
+  "C12":  { "excluded": true, "note": "err split file BF, AF split 5ku5" },
+  "C13":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } },
+  "C14":  { "excluded": true, "note": "HalfBrainiac" },
+  "C15":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } },
+  "C16":  { "RS_before": { "ec_start_s": 315  }, "RS_after": { "ec_start_s": 308 } },
+  "C17":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } },
+  "C18":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } },
+  "C19":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } },
+  "C20":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } },
+  "C21":  { "RS_before": { "ec_start_s": 315  }, "RS_after": { "ec_start_s": 325 } },
+  "C22":  { "RS_before": { "ec_start_s": 355  }, "RS_after": { "ec_start_s": 303 } },
+  "C23":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } },
+  "C24":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } },
+  "C25":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } },
+  "C26":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } },
+  "C27":  { "RS_before": { "ec_start_s": null }, "RS_after": { "ec_start_s": null } }
+}
