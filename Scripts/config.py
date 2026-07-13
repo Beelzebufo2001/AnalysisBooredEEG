@@ -111,3 +111,16 @@ DEFAULT_EPOCH = 0.5
 #Epoch treshold: jak často se něco musí dít v čase aby to bylo podezřelé. JE to stabilita v čase na procentech
 DEFAULT_LMCUTT = 5
 #Prostorový treshold: říká nám jak malý může být ED než nám to začne být podezřelé. FUnguje čistě na hodnoty mezi elektrodami
+
+# ── Segment Definitions ─────────────────────────────────────────────────────────
+STATE_WINDOWS = {
+
+    "FEO": (10,20),
+
+    "LEO": (270,280),
+
+    "FEC": (320,330),
+
+    "LEC": (580,590)
+
+}
