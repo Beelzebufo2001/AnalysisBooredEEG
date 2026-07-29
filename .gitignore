@@ -5,3 +5,4 @@ benv/
 readwhat.txt
 activate_venv.txt
 poznamky/*
+.ipynb_checkpoints

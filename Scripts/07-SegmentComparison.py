@@ -6,13 +6,14 @@ import sys
 import json
 import argparse
 import matplotlib
-import mat
-
+import numpy as np
+from pathlib import Path
+`
 import config
 # =============================================================================
 # CLI
 # =============================================================================
-def argparse():
+def parse_args():
     parser = argparse.ArgumentParser(
         desctription="",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -112,11 +113,26 @@ def loadSegments(matrices, metadata, feo, leo, fec, lec):
 # =============================================================================
 # Saving
 # =============================================================================
-def saveMetadata():
-
+    #!/usr/bin/env python3
 # =============================================================================
 # Processing data
 # =============================================================================
+
+def compute_metrics(segments):
+    mean = []
+    std = []
+    median = []
+    q25 = []
+    q75 = []
+    for seg in segments:
+        upper = np.triu_indices(seg.shape[1], k=1)
+        mean.append(np.array([np.mean(m[upper]) for m in seg]))
+        std.append(np.array([np.std(m[upper])  for m in seg]))
+        median.append(np.array([np.median(m[upper]) for m in seg]))
+        q25.append(np.array([np.percentile(m[upper], 25) for m in seg]))
+        q75.append(np.array([np.percentile(m[upper], 75) for m in seg]))
+        
+    return mean, std, median, q25, q75
 
 
 # =============================================================================
@@ -131,7 +147,8 @@ def main():
     feo, leo, fec, lec = stateWindows(args.subject, args.recording, args.length) # tuna mame useky co budeme v npy hledat 
     seg1, seg2, seg3, seg4 = loadSegments(matrices, metadata, feo, leo, fec, lec) #tuna mame actual segmenty matic
 
-    
+    mean, std, median, q25, q75 = compute_metrics([seg1, seg2, seg3, seg4])
+
     
     
 if __name__ == "__main__":
