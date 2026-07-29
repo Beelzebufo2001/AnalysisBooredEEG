@@ -1,9 +1,0 @@
-pouzivej -u jako flushing mode
-
-#SBATCH --output=logs/region_conn_%j.out
-#SBATCH --error=logs/region_conn_%j.err
-python -u 04-RegionConn.py
-
-nebo primo v kodu 
-
-print("Processing C27", flush=True)
