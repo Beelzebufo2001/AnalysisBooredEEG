@@ -41,6 +41,12 @@ def argparse():
         metavar="FOLDER",
         help="Parameter folder name, e.g. sf250_win10_step1_bp1-45. ",
     )
+    parser.add_argument(
+        "--length",
+        default = 10,
+        type = int,
+        help = "Length of the quantified window."
+    )
     return parser.parse_args()
     
 # =============================================================================
@@ -63,7 +69,45 @@ def load_matrices(param_dir):
     if not files:
         raise FileNotFoundError(f"No .npy files in {param_dir}")
     return np.stack([np.load(f) for f in files])
+    
+# =============================================================================
+# Loading
+# =============================================================================
 
+def stateWindows(subject, recording, w_size):
+    #koukni jestli neexistuje zaznam v EyesClosed.json -> apply config or apply Eyesclosed 
+    with open("EyesCLosed.json", "r") as file:
+        data[subject][recording] = json.load(file)
+        
+        if ["excluded"] == "true": # treba predelat json aby povedal ze pacienta prcam 
+            print(f"Subject's {subject} recording {recording} is excluded from quantification")
+            break;
+
+        feo = config.STATE_WINDOWS["FEO"]
+        lec = config.STATE_WINDOWS["LEC"]
+
+        change = ["ec_start_s"]
+        if change == "null"
+            leo = config.STATE_WINDOWS["LEO"]
+            fec = config.STATE_WINDOWS["FEC"]
+        else
+            leo = (change -2 - w_size ,change-2)
+            fec = (chage + 2, chage + 2 + w_size)
+
+        
+        #select our subject from data
+    return feo, leo, fec, lec
+
+def loadSegments(matrices, metadata, feo, leo, fec, lec):
+    #treba prevest sekundy na cislo matrice podle toho jake je meno parametru!
+    step_s = metadata["step_s"]
+
+    seg1 = matrices[(feo(0)/step_s): (feo(1)/step_s)+1]
+    seg2 = matrices[(leo(0)/step_s): (leo(1)/step_s)+1]
+    seg3 = matrices[(fec(0)/step_s): (fec(1)/step_s)+1]
+    seg4 = matrices[(lec(0)/step_s): (lec(1)/step_s)+1]
+    
+    return seg1, seg2, seg3, seg4
     
 # =============================================================================
 # Saving
@@ -73,25 +117,8 @@ def saveMetadata():
 # =============================================================================
 # Processing data
 # =============================================================================
-def stateWindows(matrices, subject):
-    #koukni jestli neexistuje zaznam v EyesClosed.json -> apply config or apply Eyesclosed 
-    with open("EyesCLosed.json", "r") as file:
-        data[subject] = json.load(file)
-        if ["excluded"] == "false":
-            return smutek;
 
-        feo = config.STATE_WINDOWS["FEO"]
-        lec = config.STATE_WINDOWS["LEC"]
-        before =     "RS_before": { "ec_start_s" },
 
-        after =     "RS_after": { "ec_start_s": },
-
-        if before == null 
-        if after == null 
-
-        
-        #select our subject from data
-    return feo, leo, fec, lec
 # =============================================================================
 # Main
 # =============================================================================
@@ -101,7 +128,11 @@ def main():
     matrices = load_matrices(root)
     metadata = load_metadata(root)
 
-    feo, leo, fec, lec = stateWindows(matrices, args.subject)
+    feo, leo, fec, lec = stateWindows(args.subject, args.recording, args.length) # tuna mame useky co budeme v npy hledat 
+    seg1, seg2, seg3, seg4 = loadSegments(matrices, metadata, feo, leo, fec, lec) #tuna mame actual segmenty matic
+
+    
+    
     
 if __name__ == "__main__":
-    main()
+    main() 
