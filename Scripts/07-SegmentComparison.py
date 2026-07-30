@@ -8,7 +8,9 @@ import argparse
 import matplotlib
 import numpy as np
 from pathlib import Path
-`
+import matplotlib.pyplot as plt
+import warning as w
+
 import config
 # =============================================================================
 # CLI
@@ -26,7 +28,7 @@ def parse_args():
     )
     parser.add_argument(
         "--subject",
-        nargs="+",
+        type=str
         default=None,
         help="Selected from slurm array idc for fcs",
     )
@@ -76,6 +78,14 @@ def load_matrices(param_dir):
 # =============================================================================
 from dataclasses import dataclass
 
+SEG_COLORS = {
+    "FEO": "#7aaddc",
+    "LEO": "#4a8abf",
+    "FEC": "#e07b8a",
+    "LEC": "#b84f5f",
+}
+METRICS = ["mean", "std", "median", "q25", "q75"]
+
 @dataclass
 class Segment:
     name: str
@@ -96,12 +106,18 @@ class Segment:
             return 0
         return len(self.matrices)
 
+    @property
+    def color(self) -> str:
+        return SEG_COLORS[self.name]
+
     def load_segment_matrices(self, matrices, metadata):
         #treba prevest sekundy na cislo matrice podle toho jake je meno parametru!
         step_s = metadata["step_s"]
         self.matrices = matrices[(self.start//step_s) : (self.end//step_s)+1]
 
     def compute_metrics(self):
+        if self.matrices is None:
+            return
         upper = np.triu_indices(self.matrices.shape[1], k=1)
         self.mean = np.array([np.mean(m[upper]) for m in self.matrices])
         self.std = np.array([np.std(m[upper])  for m in self.matrices])
@@ -136,7 +152,109 @@ def read_eyes_closed(subject, recording, w_size, segments):
 # =============================================================================
 # Saving
 # =============================================================================
+def save_segment_figure(subject, recording, matrix_type, params, segments, metadata, output_dir):
+    """
+    Save one overview figure per subject.
 
+    Shows:
+    - mean connectivity timeline for each segment
+    - summary statistics
+    - basic metadata
+    """
+
+    fig, axes = plt.subplots(
+        2, 2,
+        figsize=(12, 8),
+        constrained_layout=True
+    )
+
+    axes = axes.flatten()
+
+    for ax, (name, seg) in zip(axes, segments.items()):
+
+        if seg.matrices is None:
+            ax.set_title(f"{name} - NO DATA")
+            ax.axis("off")
+            continue
+
+        # x axis = window number
+        x = np.arange(seg.n_windows)
+
+        ax.plot(
+            x,
+            seg.mean,
+            linewidth=1.5,
+            label="mean"
+        )
+
+        ax.fill_between(
+            x,
+            seg.q25,
+            seg.q75,
+            alpha=0.3,
+            label="Q25-Q75"
+        )
+
+        ax.set_title(
+            f"{name}: {seg.start}-{seg.end}s\n"
+            f"{seg.n_windows} windows"
+        )
+
+        ax.set_xlabel("Window")
+        ax.set_ylabel("Connectivity")
+
+        ax.legend(fontsize=8)
+        ax.grid(alpha=0.3)
+
+
+    # Metadata text
+    meta_text = (
+        f"Subject: {subject}\n"
+        f"Recording: {recording}\n"
+        f"Matrix: {matrix_type}\n"
+        f"Parameters: {params}\n\n"
+        f"Step: {metadata.get('step_s','?')} s\n"
+        f"Window length: {metadata.get('window_length_s','?')} s\n"
+        f"Channels: {metadata.get('n_channels','?')}"
+    )
+
+    fig.text(
+        0.01,
+        0.01,
+        meta_text,
+        fontsize=9,
+        verticalalignment="bottom"
+    )
+
+
+    fig.suptitle(
+        f"{subject} | {recording} | {matrix_type}",
+        fontsize=14
+    )
+
+
+    output_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    filename = (
+        f"{subject}_{recording}_{matrix_type}_{params}.png"
+    )
+
+    path = output_dir / filename
+
+    fig.savefig(
+        path,
+        dpi=200,
+        bbox_inches="tight"
+    )
+
+    plt.close(fig)
+
+    print(f"Saved figure: {path}")
+
+    return path
 # =============================================================================
 # Main
 # =============================================================================
@@ -163,7 +281,28 @@ def main():
         seg.load_segment_matrices(matrices, metadata) #tuna mame actual segmenty matic
         seg.compute_metrics()
 
+    output_dir = (
+        config.SUMMARY_OUTPUT_DIR
+        / "segment_figures"
+        / args.matrix_type
+        / args.recording
+        / args.subject
+    )
+
+
+    save_segment_figure(
+        subject=args.subject,
+        recording=args.recording,
+        matrix_type=args.matrix_type,
+        params=args.params,
+        segments=segments,
+        metadata=metadata,
+        output_dir=output_dir,
+    )
     
     
 if __name__ == "__main__":
-    main() 
+    with w.catch_warnings():
+        w.simplefilter("ignore", RuntimeWarning)
+        main() 
+
