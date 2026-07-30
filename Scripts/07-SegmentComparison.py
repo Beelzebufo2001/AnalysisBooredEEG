@@ -74,66 +74,68 @@ def load_matrices(param_dir):
 # =============================================================================
 # Loading
 # =============================================================================
+from dataclasses import dataclass
 
-def stateWindows(subject, recording, w_size):
-    #koukni jestli neexistuje zaznam v EyesClosed.json -> apply config or apply Eyesclosed 
-    with open("EyesCLosed.json", "r") as file:
-        data[subject][recording] = json.load(file)
-        
-        if ["excluded"] == "true": # treba predelat json aby povedal ze pacienta prcam 
-            print(f"Subject's {subject} recording {recording} is excluded from quantification")
-            break;
+@dataclass
+class Segment:
+    name: str
+    start: int 
+    end: int 
 
-        feo = config.STATE_WINDOWS["FEO"]
-        lec = config.STATE_WINDOWS["LEC"]
+    matrices : np.ndarray | None = None
 
-        change = ["ec_start_s"]
-        if change == "null"
-            leo = config.STATE_WINDOWS["LEO"]
-            fec = config.STATE_WINDOWS["FEC"]
-        else
-            leo = (change -2 - w_size ,change-2)
-            fec = (chage + 2, chage + 2 + w_size)
-
-        
-        #select our subject from data
-    return feo, leo, fec, lec
-
-def loadSegments(matrices, metadata, feo, leo, fec, lec):
-    #treba prevest sekundy na cislo matrice podle toho jake je meno parametru!
-    step_s = metadata["step_s"]
-
-    seg1 = matrices[(feo(0)/step_s): (feo(1)/step_s)+1]
-    seg2 = matrices[(leo(0)/step_s): (leo(1)/step_s)+1]
-    seg3 = matrices[(fec(0)/step_s): (fec(1)/step_s)+1]
-    seg4 = matrices[(lec(0)/step_s): (lec(1)/step_s)+1]
+    mean : np.ndarray | None = None
+    std: np.ndarray | None = None
+    median: np.ndarray | None = None
+    q25: np.ndarray | None = None
+    q75: np.ndarray | None = None
     
-    return seg1, seg2, seg3, seg4
+    @property
+    def n_windows(self):
+        if self.matrices is None:
+            return 0
+        return len(self.matrices)
+
+    def load_segment_matrices(self, matrices, metadata):
+        #treba prevest sekundy na cislo matrice podle toho jake je meno parametru!
+        step_s = metadata["step_s"]
+        self.matrices = matrices[(self.start//step_s) : (self.end//step_s)+1]
+
+    def compute_metrics(self):
+        upper = np.triu_indices(self.matrices.shape[1], k=1)
+        self.mean = np.array([np.mean(m[upper]) for m in self.matrices])
+        self.std = np.array([np.std(m[upper])  for m in self.matrices])
+        self.median = np.array([np.median(m[upper]) for m in self.matrices])
+        self.q25 = np.array([np.percentile(m[upper], 25) for m in self.matrices])
+        self.q75 = np.array([np.percentile(m[upper], 75) for m in self.matrices])
+
+
+        
+def read_eyes_closed(subject, recording, w_size, segments):
+    with open("EyesCLosed.json", "r") as file:
+        data = json.load(file)
+        entry = data[subject][recording] 
+    
+        change = entry["ec_start_s"]
+        
+        if entry["excluded"]: # treba predelat json aby povedal ze pacienta prcam 
+            print(f"Subject's {subject} recording {recording} is excluded from quantification")
+            raise ValueError("I dont wanna by by~")
+    
+        elif change is not None:
+            segments["LEO"].start = change - 2 - w_size
+            segments["LEO"].end   = change - 2
+            
+            segments["FEC"].start = change + 2
+            segments["FEC"].end   = change + 2 + w_size
+            
+            
+    return segments
+
     
 # =============================================================================
 # Saving
 # =============================================================================
-    #!/usr/bin/env python3
-# =============================================================================
-# Processing data
-# =============================================================================
-
-def compute_metrics(segments):
-    mean = []
-    std = []
-    median = []
-    q25 = []
-    q75 = []
-    for seg in segments:
-        upper = np.triu_indices(seg.shape[1], k=1)
-        mean.append(np.array([np.mean(m[upper]) for m in seg]))
-        std.append(np.array([np.std(m[upper])  for m in seg]))
-        median.append(np.array([np.median(m[upper]) for m in seg]))
-        q25.append(np.array([np.percentile(m[upper], 25) for m in seg]))
-        q75.append(np.array([np.percentile(m[upper], 75) for m in seg]))
-        
-    return mean, std, median, q25, q75
-
 
 # =============================================================================
 # Main
@@ -144,10 +146,22 @@ def main():
     matrices = load_matrices(root)
     metadata = load_metadata(root)
 
-    feo, leo, fec, lec = stateWindows(args.subject, args.recording, args.length) # tuna mame useky co budeme v npy hledat 
-    seg1, seg2, seg3, seg4 = loadSegments(matrices, metadata, feo, leo, fec, lec) #tuna mame actual segmenty matic
+    segments = {
+        "FEO": Segment("FEO", config.STATE_WINDOWS["FEO"][0], config.STATE_WINDOWS["FEO"][1]),
+        
+        "LEO": Segment("LEO", config.STATE_WINDOWS["LEO"][0], config.STATE_WINDOWS["LEO"][1]),
+    
+        "FEC": Segment("FEC", config.STATE_WINDOWS["FEC"][0], config.STATE_WINDOWS["FEC"][1]),
+    
+        "LEC": Segment("LEC", config.STATE_WINDOWS["LEC"][0], config.STATE_WINDOWS["LEC"][1]),
 
-    mean, std, median, q25, q75 = compute_metrics([seg1, seg2, seg3, seg4])
+    }
+
+    segments = read_eyes_closed(args.subject, args.recording, args.length, segments)
+
+    for label, seg in segments.items():
+        seg.load_segment_matrices(matrices, metadata) #tuna mame actual segmenty matic
+        seg.compute_metrics()
 
     
     
