@@ -9,7 +9,7 @@ import matplotlib
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
-import warning as w
+import warnings as w
 
 import config
 # =============================================================================
@@ -17,7 +17,6 @@ import config
 # =============================================================================
 def parse_args():
     parser = argparse.ArgumentParser(
-        desctription="",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -28,7 +27,7 @@ def parse_args():
     )
     parser.add_argument(
         "--subject",
-        type=str
+        type=str,
         default=None,
         help="Selected from slurm array idc for fcs",
     )
