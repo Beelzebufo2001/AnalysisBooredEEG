@@ -59,7 +59,7 @@ echo "============================================"
 # =============================================================================
 # Run  (-u = unbuffered stdout so logs flush in real time)
 # =============================================================================
-python -u 7_SegmentComparison.py \
+python -u 07-SegmentComparison.py \
     --subject "$SUBJECT"                      \
     --recording    RS_before                  \
     --matrix-type  corr_matrices              \

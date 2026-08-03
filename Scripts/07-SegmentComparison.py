@@ -113,6 +113,10 @@ class Segment:
     def color(self) -> str:
         return SEG_COLORS[self.name]
 
+    @property 
+    def ok(self):
+        return self.matrices is not None and len(self.matrices) > 0 
+
     def load_segment_matrices(self, matrices, metadata):
         #treba prevest sekundy na cislo matrice podle toho jake je meno parametru!
         #step_s = metadata["step_s"]
@@ -128,6 +132,14 @@ class Segment:
         self.median = np.array([np.median(m[upper]) for m in self.matrices])
         self.q25 = np.array([np.percentile(m[upper], 25) for m in self.matrices])
         self.q75 = np.array([np.percentile(m[upper], 75) for m in self.matrices])
+
+    def mean_matrix(self):
+        return np.mean(self.matrices, axis=0) if self.ok else None #axis = 0 pro dimenzi matice, bez toho to posle jedno cislo misto matice -> prumer pres okna
+
+    def scalar(self, matric):
+        #GUMBUS WERRY COOL... NICE
+        arr = getattr(self,metric)
+        return float(np.mean(arr)) if arr is not None else None
 
 
         
@@ -340,6 +352,7 @@ def save_segment_figure_hard(subject, recording, matrix_type, params,
             mm = seg.mean_matrix()
             im = ax_heat.imshow(mm, cmap=cmap, aspect="auto",
                                 vmin=vmin, vmax=vmax)
+            print(name, mm.shape, flush=True)
             ax_heat.axis("off")
             plt.colorbar(im, ax=ax_heat, fraction=0.045, pad=0.02,
                          label="connectivity")
