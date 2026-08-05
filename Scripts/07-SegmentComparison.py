@@ -87,6 +87,7 @@ SEG_COLORS = {
     "FEC": "#e07b8a",
     "LEC": "#b84f5f",
 }
+
 METRICS = ["mean", "std", "median", "q25", "q75"]
 
 @dataclass
