@@ -1,0 +1,102 @@
+{
+    "FEO": {
+        "segment": "FEO",
+        "time": {
+            "start_s": 10,
+            "end_s": 20,
+            "duration_s": 10,
+            "n_windows": 10
+        },
+        "connectivity": {
+            "mean_of_window_means": -0.0023980880184871858,
+            "mean_of_window_medians": -0.04626518267638932,
+            "mean_of_window_std": 0.5206883959811479,
+            "mean_of_window_q25": -0.47829619355119135,
+            "mean_of_window_q75": 0.43594254210087086,
+            "global_min": -0.05137389972888638,
+            "global_max": -0.0016386965484941475
+        },
+        "interpretation": {
+            "mean": "Average connectivity across windows.",
+            "median": "Robust central connectivity value.",
+            "std": "Average variability of connectivity between windows.",
+            "q25": "Lower quartile of connectivity distribution.",
+            "q75": "Upper quartile of connectivity distribution."
+        }
+    },
+    "LEO": {
+        "segment": "LEO",
+        "time": {
+            "start_s": 270,
+            "end_s": 280,
+            "duration_s": 10,
+            "n_windows": 10
+        },
+        "connectivity": {
+            "mean_of_window_means": -0.002437593053507267,
+            "mean_of_window_medians": -0.04039959418808835,
+            "mean_of_window_std": 0.4994712821628987,
+            "mean_of_window_q25": -0.4396761613426426,
+            "mean_of_window_q75": 0.4100231729297354,
+            "global_min": -0.05180559125878356,
+            "global_max": -0.0008489858935450495
+        },
+        "interpretation": {
+            "mean": "Average connectivity across windows.",
+            "median": "Robust central connectivity value.",
+            "std": "Average variability of connectivity between windows.",
+            "q25": "Lower quartile of connectivity distribution.",
+            "q75": "Upper quartile of connectivity distribution."
+        }
+    },
+    "FEC": {
+        "segment": "FEC",
+        "time": {
+            "start_s": 320,
+            "end_s": 330,
+            "duration_s": 10,
+            "n_windows": 10
+        },
+        "connectivity": {
+            "mean_of_window_means": 0.009047346482774398,
+            "mean_of_window_medians": -0.03774788013976336,
+            "mean_of_window_std": 0.5302175081895026,
+            "mean_of_window_q25": -0.4533759900094008,
+            "mean_of_window_q75": 0.4559514874655791,
+            "global_min": -0.04723274331592646,
+            "global_max": 0.010327285989648584
+        },
+        "interpretation": {
+            "mean": "Average connectivity across windows.",
+            "median": "Robust central connectivity value.",
+            "std": "Average variability of connectivity between windows.",
+            "q25": "Lower quartile of connectivity distribution.",
+            "q75": "Upper quartile of connectivity distribution."
+        }
+    },
+    "LEC": {
+        "segment": "LEC",
+        "time": {
+            "start_s": 580,
+            "end_s": 590,
+            "duration_s": 10,
+            "n_windows": 10
+        },
+        "connectivity": {
+            "mean_of_window_means": 0.021557447096558886,
+            "mean_of_window_medians": -0.025846880481481493,
+            "mean_of_window_std": 0.577505909704982,
+            "mean_of_window_q25": -0.4970516217860331,
+            "mean_of_window_q75": 0.5554833279429154,
+            "global_min": -0.03247409115927133,
+            "global_max": 0.023317198365234586
+        },
+        "interpretation": {
+            "mean": "Average connectivity across windows.",
+            "median": "Robust central connectivity value.",
+            "std": "Average variability of connectivity between windows.",
+            "q25": "Lower quartile of connectivity distribution.",
+            "q75": "Upper quartile of connectivity distribution."
+        }
+    }
+}

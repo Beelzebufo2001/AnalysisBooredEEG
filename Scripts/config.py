@@ -124,3 +124,17 @@ STATE_WINDOWS = {
     "LEC": (580,590)
 
 }
+DEFAULT_EC_START_S = 300
+EC_GAP = 2
+EDGE_BUFFER_S = 10
+SEG_COLORS = {
+
+    "FEO": "#D97B7B",
+
+    "LEO": "#F4B6B6",
+
+    "FEC": "#5F9F8F",
+
+    "LEC": "#B7D7C1",
+
+}

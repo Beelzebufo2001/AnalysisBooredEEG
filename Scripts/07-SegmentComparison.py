@@ -1,17 +1,39 @@
 #!/usr/bin/env python3
+"""
+======================
+Per-subject focused analysis plots. Each function produces one PNG.
+ 
+Plots:
+  1. plot_matrix_heatmap            — averaged (N×N) matrix per segment
+  2. plot_difference_heatmaps       — LEO-FEO, LEC-FEC, FEC-LEO, LEC-FEO
+  3. print_biggest_electrode_changes — console ranking, no PNG
+  4. plot_connectivity_distribution  — histogram of ALL upper-tri values per segment
+  5. plot_mean_connectivity_dist     — histogram of per-window means
+  6. plot_node_strength_dist         — histogram of per-electrode strength
+  7. plot_difference_distribution    — histogram of Δ values between segment pairs
+  8. plot_mean_matrix_distribution   — histogram of mean-matrix upper-tri values
+"""
+
 # =============================================================================
 # Imports
 # =============================================================================
 import sys
 import json
 import argparse
-import matplotlib
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use("Agg")
+from dataclasses import dataclass, field
 import warnings as w
+from segment_statistics import save_statistics
 
 import config
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
 # =============================================================================
 # CLI
 # =============================================================================
@@ -49,54 +71,21 @@ def parse_args():
         type = int,
         help = "Length of the quantified window."
     )
+    parser.add_argument("--top-n", default=10, type=int,
+                    help="Top N electrodes in ranking printout.")
+
     return parser.parse_args()
+# =============================================================================
+# Segment
+# =============================================================================
     
-# =============================================================================
-# Reading
-# =============================================================================
-def getRoot(m_type, subj, reco, param):
-    root = config.OUTPUT_DIR/m_type/subj/reco/param
-    
-    #kontrola if root exist ofc
-    if not root.exists():
-        raise FileNotFoundError(f"Matrix forlder not found: {root}")
-    return root
-
-def load_metadata(param_dir):
-    meta_path = param_dir / "metadata.json"
-    if meta_path.exists():
-        with open(meta_path) as f:
-            return json.load(f)
-    return {}
-
-def load_matrices(param_dir):
-    """Load all .npy files sorted by filename → (T, N, N) array."""
-    files = sorted(param_dir.glob("*.npy"))
-    if not files:
-        raise FileNotFoundError(f"No .npy files in {param_dir}")
-    return np.stack([np.load(f) for f in files])
-    
-# =============================================================================
-# Loading
-# =============================================================================
-from dataclasses import dataclass
-
-SEG_COLORS = {
-    "FEO": "#7aaddc",
-    "LEO": "#4a8abf",
-    "FEC": "#e07b8a",
-    "LEC": "#b84f5f",
-}
-
-METRICS = ["mean", "std", "median", "q25", "q75"]
-
 @dataclass
 class Segment:
     name: str
     start: int 
     end: int 
 
-    matrices : np.ndarray | None = None
+    matrices: np.ndarray | None = field(default=None, repr=False)
 
     mean : np.ndarray | None = None
     std: np.ndarray | None = None
@@ -112,13 +101,33 @@ class Segment:
 
     @property
     def color(self) -> str:
-        return SEG_COLORS[self.name]
+        return config.SEG_COLORS[self.name]
 
     @property 
     def ok(self):
         return self.matrices is not None and len(self.matrices) > 0 
-
-    def load_segment_matrices(self, matrices, metadata):
+        
+    @property
+    def mean_matrix(self):
+        return np.mean(self.matrices, axis=0) if self.ok else None#axis = 0 pro dimenzi matice, bez toho to posle jedno cislo misto matice -> prumer pres okna
+    @property
+    def mean_windows(self): #np.mean(self.matrices, axis=(1,2)) umele zvedani hodnoty ig
+        if not self.ok:
+            return None
+        upper = np.triu_indices(self.matrices.shape[1], k=1)
+        values = self.matrices[:,upper[0],upper[1]]
+        return np.mean(values, axis = 1)
+        
+    def load(self, matrices: np.ndarray, step_s: int):
+        i_start = self.start // step_s
+        i_end   = self.end   // step_s     # exclusive
+        self.matrices = matrices[i_start:i_end]
+        if len(self.matrices) == 0:
+            print(f"  WARNING [{self.name}]: no windows in [{self.start}, {self.end})s")
+            self.matrices = None
+        
+""" 
+   def load_segment_matrices(self, matrices, metadata):
         #treba prevest sekundy na cislo matrice podle toho jake je meno parametru!
         #step_s = metadata["step_s"]
         step_s = metadata.get("step_s", 1)
@@ -134,17 +143,39 @@ class Segment:
         self.q25 = np.array([np.percentile(m[upper], 25) for m in self.matrices])
         self.q75 = np.array([np.percentile(m[upper], 75) for m in self.matrices])
 
-    def mean_matrix(self):
-        return np.mean(self.matrices, axis=0) if self.ok else None #axis = 0 pro dimenzi matice, bez toho to posle jedno cislo misto matice -> prumer pres okna
-
     def scalar(self, matric):
         #GUMBUS WERRY COOL... NICE
         arr = getattr(self,metric)
         return float(np.mean(arr)) if arr is not None else None
+"""
 
+# =============================================================================
+# IO
+# =============================================================================
+def getRoot(m_type, subj, reco, param):
+    root = config.OUTPUT_DIR/m_type/subj/reco/param
+    
+    #kontrola if root exist ofc
+    if not root.exists():
+        raise FileNotFoundError(f"Matrix forlder not found: {root}")
+    return root
 
-        
+def load_metadata(param_dir):
+    p = param_dir / "metadata.json"
+    return json.load(open(p)) if p.exists() else {} # nezavre se?
+
+def load_matrices(param_dir):
+    """Load all .npy files sorted by filename → (T, N, N) array."""
+    files = sorted(param_dir.glob("*.npy"))
+    if not files:
+        raise FileNotFoundError(f"No .npy files in {param_dir}")
+    return np.stack([np.load(f) for f in files])
+
+#DEPRECATED >>>>>>>>>
+"""
 def read_eyes_closed(subject, recording, w_size, segments):
+#   CO VŠECHNO TATO FUNCKE DĚLÁ:
+#   otevírá šuplík, kouká do šuplíku, třídí šuplík a vytváří nové hromádky v novém systému 
     with open("EyesClosed.json", "r") as file:
         data = json.load(file)
         entry = data[subject][recording] 
@@ -174,358 +205,529 @@ def read_eyes_closed(subject, recording, w_size, segments):
             print(f"  EC start: unknown — LEO/FEC using config defaults (midpoint).")
             
     return segments
+    """
+#<<<<<<<<<<<<<<<<<<<<<<<<<  
+    
+def load_ec(subject, recording):
+    ec_path = Path(__file__).parent / "eyesClosed.json"
+    if not ec_path.exists():
+        return None
+        
+    data = json.load(open(ec_path))
+    entry = data.get(subject, {})
+    if entry.get("excluded", False):
+        raise ValueError(f"{subject} is excluded.")
+        
+    rec = entry.get(recording, {})
+    
+    if rec.get("excluded", False):
+        raise ValueError(f"{subject}/{recording} is excluded.")
+        
+    return rec.get("ec_start_s", None) #, ec_start_s is not NONE je silnejsi nez v buildu >> verified
 
+def build_segments(matrices, metadata, ec_start_s, length):
+    step_s  = metadata.get("step_s", 1)
+    total_s = matrices.shape[0] * step_s
+ 
+    if ec_start_s is None:
+        ec_start_s = config.DEFAULT_EC_START_S
+        gap = config.UNKNOWN_EC_GAP_S
+        print(f"  EC unknown → using default EC position ({ec_start_s}s)")
+    else:
+        gap = config.EC_GAP_S
+ 
+    buf = config.EDGE_BUFFER_S
+    segs = {
+        "FEO": Segment("FEO", buf,                             buf + length),
+        "LEO": Segment("LEO", ec_start_s - gap - length,   ec_start_s - gap),
+        "FEC": Segment("FEC", ec_start_s + gap,            ec_start_s + gap + length),
+        "LEC": Segment("LEC", total_s - buf - length,          total_s - buf),
+    }
+    for s in segs.values():
+        s.load(matrices, step_s)
+    return segs, ec_start_s
     
 # =============================================================================
-# Saving
+# Save helper
 # =============================================================================
-def save_segment_figure(subject, recording, matrix_type, params, segments, metadata, output_dir):
-    """
-    Save one overview figure per subject.
-
-    Shows:
-    - mean connectivity timeline for each segment
-    - summary statistics
-    - basic metadata
-    """
-
-    fig, axes = plt.subplots(
-        2, 2,
-        figsize=(12, 8),
-        constrained_layout=True
-    )
-
-    axes = axes.flatten()
-
-    for ax, (name, seg) in zip(axes, segments.items()):
-
-        if seg.matrices is None:
-            ax.set_title(f"{name} - NO DATA")
-            ax.axis("off")
-            continue
-
-        # x axis = window number
-        x = np.arange(seg.n_windows)
-
-        ax.plot(
-            x,
-            seg.mean,
-            linewidth=1.5,
-            label="mean"
-        )
-
-        ax.fill_between(
-            x,
-            seg.q25,
-            seg.q75,
-            alpha=0.3,
-            label="Q25-Q75"
-        )
-
-        ax.set_title(
-            f"{name}: {seg.start}-{seg.end}s\n"
-            f"{seg.n_windows} windows"
-        )
-
-        ax.set_xlabel("Window")
-        ax.set_ylabel("Connectivity")
-
-        ax.legend(fontsize=8)
-        ax.grid(alpha=0.3)
-
-
-    # Metadata text
-    meta_text = (
-        f"Subject: {subject}\n"
-        f"Recording: {recording}\n"
-        f"Matrix: {matrix_type}\n"
-        f"Parameters: {params}\n\n"
-        f"Step: {metadata.get('step_s','?')} s\n"
-        f"Window length: {metadata.get('window_length_s','?')} s\n"
-        f"Channels: {metadata.get('n_channels','?')}"
-    )
-
-    fig.text(
-        0.01,
-        0.01,
-        meta_text,
-        fontsize=9,
-        verticalalignment="bottom"
-    )
-
-
-    fig.suptitle(
-        f"{subject} | {recording} | {matrix_type}",
-        fontsize=14
-    )
-
-
-    output_dir.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    filename = (
-        f"{subject}_{recording}_{matrix_type}_{params}.png"
-    )
-
-    path = output_dir / filename
-
-    fig.savefig(
-        path,
-        dpi=200,
-        bbox_inches="tight"
-    )
-
-    plt.close(fig)
-
-    print(f"Saved figure: {path}")
-
-    return path
-
-def save_segment_figure_hard(subject, recording, matrix_type, params,
-                        segments, metadata, output_dir):
-    """
-    4-column comparison figure — one column per segment (FEO, LEO, FEC, LEC).
- 
-    Row 0  — averaged connectivity heatmap
-    Row 1  — violin + boxplot of all upper-triangle values across windows
-    Row 2  — mean connectivity timeline within the segment (window-by-window)
-    Row 3  — statistics table (mean / std / median / Q25 / Q75 / min / max)
-    """
-    seg_names = ["FEO", "LEO", "FEC", "LEC"]
-    n_cols    = len(seg_names)
- 
-    is_plv  = matrix_type == "plv_matrices"
-    cmap    = "magma" if is_plv else "RdBu_r"
- 
-    # shared color limits from actual data
-    all_means = [segments[n].mean_matrix() for n in seg_names
-                 if segments[n].ok]
-    if all_means:
-        vmin = min(m.min() for m in all_means)
-        vmax = max(m.max() for m in all_means)
-    else:
-        vmin, vmax = (-1, 1)
- 
-    fig = plt.figure(figsize=(5 * n_cols, 18), constrained_layout=False)
-    fig.patch.set_facecolor("#fafafa")
- 
-    # grid: 4 rows, proportional heights
-    gs = fig.add_gridspec(
-        4, n_cols,
-        height_ratios=[3, 2.5, 1.8, 1.6],
-        hspace=0.45, wspace=0.35,
-        left=0.06, right=0.97, top=0.93, bottom=0.03,
-    )
- 
-    STAT_ROWS = ["mean", "std", "median", "Q25", "Q75", "min", "max"]
- 
-    for col, name in enumerate(seg_names):
-        seg  = segments[name]
-        color = SEG_COLORS[name]
- 
-        # ── column header bar ─────────────────────────────────────────────────
-        # attach a colored label just above row 0
-        header_ax = fig.add_axes([
-            gs[0, col].get_position(fig).x0,
-            gs[0, col].get_position(fig).y1 + 0.002,
-            gs[0, col].get_position(fig).width,
-            0.022,
-        ])
-        header_ax.set_facecolor(color)
-        header_ax.axis("off")
-        label = name if not seg.ok else (
-            f"{name}   [{seg.start}–{seg.end})s   n={seg.n_windows}"
-        )
-        header_ax.text(0.5, 0.5, label, ha="center", va="center",
-                       fontsize=11, fontweight="bold", color="white",
-                       transform=header_ax.transAxes)
- 
-        # ── ROW 0 — heatmap ───────────────────────────────────────────────────
-        ax_heat = fig.add_subplot(gs[0, col])
-        if not seg.ok:
-            ax_heat.text(0.5, 0.5, "NO DATA", ha="center", va="center",
-                         fontsize=14, color="#aaaaaa",
-                         transform=ax_heat.transAxes)
-            ax_heat.axis("off")
-        else:
-            mm = seg.mean_matrix()
-            im = ax_heat.imshow(mm, cmap=cmap, aspect="auto",
-                                vmin=vmin, vmax=vmax)
-            print(name, mm.shape, flush=True)
-            ax_heat.axis("off")
-            plt.colorbar(im, ax=ax_heat, fraction=0.045, pad=0.02,
-                         label="connectivity")
-            ax_heat.set_title("avg matrix", fontsize=9, pad=4, color="#555555")
- 
-        # ── ROW 1 — violin + box ──────────────────────────────────────────────
-        ax_vio = fig.add_subplot(gs[1, col])
-        if not seg.ok:
-            ax_vio.axis("off")
-        else:
-            upper = np.triu_indices(seg.matrices.shape[1], k=1)
-            all_vals = np.concatenate([m[upper] for m in seg.matrices])
- 
-            # violin
-            parts = ax_vio.violinplot(
-                [all_vals], positions=[0],
-                showmedians=False, showextrema=False,
-            )
-            for pc in parts["bodies"]:
-                pc.set_facecolor(color); pc.set_alpha(0.45)
- 
-            # box
-            bp = ax_vio.boxplot(
-                [all_vals], positions=[0],
-                widths=0.18,
-                patch_artist=True,
-                medianprops=dict(color="black", linewidth=2),
-                boxprops=dict(facecolor=color, alpha=0.7),
-                whiskerprops=dict(color="#444444"),
-                capprops=dict(color="#444444"),
-                flierprops=dict(marker=".", markersize=2,
-                                markerfacecolor="#888888", alpha=0.4),
-            )
- 
-            # annotate key stats on the side
-            q25, med, q75 = (np.percentile(all_vals, p) for p in (25, 50, 75))
-            mn, mx = all_vals.min(), all_vals.max()
-            for val, lbl, ha in [
-                (mx,  f"max {mx:.3f}",  "left"),
-                (q75, f"Q75 {q75:.3f}", "left"),
-                (med, f"med {med:.3f}", "left"),
-                (q25, f"Q25 {q25:.3f}", "left"),
-                (mn,  f"min {mn:.3f}",  "left"),
-            ]:
-                ax_vio.axhline(val, color=color, linewidth=0.6,
-                               linestyle="--", alpha=0.6)
-                ax_vio.text(0.52, val, lbl, va="center", ha=ha,
-                            fontsize=7, color="#333333",
-                            transform=ax_vio.get_yaxis_transform())
- 
-            ax_vio.set_xlim(-0.45, 0.9)
-            ax_vio.set_xticks([])
-            ax_vio.set_ylabel("connectivity", fontsize=8)
-            ax_vio.set_title("distribution", fontsize=9, color="#555555")
-            ax_vio.grid(axis="y", alpha=0.2)
- 
-        # ── ROW 2 — within-segment timeline ───────────────────────────────────
-        ax_tl = fig.add_subplot(gs[2, col])
-        if not seg.ok:
-            ax_tl.axis("off")
-        else:
-            x = np.arange(seg.n_windows)
-            ax_tl.plot(x, seg.mean, color=color, linewidth=1.6)
-            ax_tl.fill_between(x, seg.q25, seg.q75,
-                               color=color, alpha=0.2, label="Q25–Q75")
-            ax_tl.axhline(np.mean(seg.mean), color="#444444",
-                          linewidth=0.9, linestyle="--", label="mean")
-            ax_tl.set_xlabel("window index", fontsize=8)
-            ax_tl.set_ylabel("mean conn.", fontsize=8)
-            ax_tl.set_title("within-segment timeline", fontsize=9, color="#555555")
-            ax_tl.tick_params(labelsize=7)
-            ax_tl.legend(fontsize=7, loc="upper right")
-            ax_tl.grid(alpha=0.18)
- 
-        # ── ROW 3 — stats table ───────────────────────────────────────────────
-        ax_tbl = fig.add_subplot(gs[3, col])
-        ax_tbl.axis("off")
-        if seg.ok:
-            upper  = np.triu_indices(seg.matrices.shape[1], k=1)
-            all_v  = np.concatenate([m[upper] for m in seg.matrices])
-            values = [
-                f"{np.mean(all_v):.5f}",
-                f"{np.std(all_v):.5f}",
-                f"{np.median(all_v):.5f}",
-                f"{np.percentile(all_v, 25):.5f}",
-                f"{np.percentile(all_v, 75):.5f}",
-                f"{all_v.min():.5f}",
-                f"{all_v.max():.5f}",
-            ]
-            tbl = ax_tbl.table(
-                cellText=[[v] for v in values],
-                rowLabels=STAT_ROWS,
-                colLabels=["value"],
-                cellLoc="center",
-                rowLoc="right",
-                loc="center",
-            )
-            tbl.auto_set_font_size(False)
-            tbl.set_fontsize(8.5)
-            tbl.scale(1.1, 1.55)
-            for (r, c), cell in tbl.get_celld().items():
-                if r == 0 or c == -1:
-                    cell.set_facecolor("#333333")
-                    cell.get_text().set_color("white")
-                    cell.get_text().set_fontweight("bold")
-                else:
-                    cell.set_facecolor(
-                        matplotlib.colors.to_rgba(color, alpha=0.15))
- 
-    # ── main title ────────────────────────────────────────────────────────────
-    step = metadata.get("step_s", "?")
-    win  = metadata.get("window_length_s", "?")
-    bp   = f"{metadata.get('highpass_Hz','?')}–{metadata.get('lowpass_Hz','?')} Hz"
-    ch   = metadata.get("n_channels", "?")
- 
-    fig.suptitle(
-        f"{subject}   {recording}   {matrix_type}   {params}\n"
-        f"step={step}s   window={win}s   bandpass={bp}   channels={ch}",
-        fontsize=12, fontweight="bold", y=0.975, color="#1a1a1a",
-    )
- 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / f"{subject}_{recording}_{matrix_type}_{params}.png"
-    fig.savefig(path, dpi=200, bbox_inches="tight", facecolor=fig.get_facecolor())
+def save(fig, out_dir: Path, filename: str) -> Path:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / filename
+    fig.savefig(path, dpi=200, bbox_inches="tight",
+                facecolor=fig.get_facecolor())
     plt.close(fig)
     print(f"  Saved: {path}")
     return path
+ 
+def suptitle(fig, subject, recording, matrix_type, params, extra=""):
+    fig.suptitle(
+        f"{subject}  {recording}  {matrix_type}  {params}"
+        + (f"\n{extra}" if extra else ""),
+        fontsize=10, fontweight="bold",
+    )
 
-        
+def stats_text(values) -> str:
+    return (
+        f"Mean   : {np.mean(values):.4f}\n"
+        f"Median : {np.median(values):.4f}\n"
+        f"Std    : {np.std(values):.4f}\n"
+        f"Q25    : {np.percentile(values, 25):.4f}\n"
+        f"Q75    : {np.percentile(values, 75):.4f}\n"
+        f"Min    : {np.min(values):.4f}\n"
+        f"Max    : {np.max(values):.4f}"
+    )
+
+def add_stats(ax, values, extra_lines=None):
+    """Put monospace stats block on an axis that has been axis('off')."""
+    text = stats_text(values)
+    if extra_lines:
+        text += "\n" + "\n".join(extra_lines)
+    ax.text(0.05, 0.5, text, fontsize=10, va="center",
+            family="monospace", transform=ax.transAxes)
+
 # =============================================================================
-# Main
+# 1. MATRIX HEATMAPS
+# =============================================================================
+def plot_matrix_heatmap(segments, metadata,
+                        subject, recording, matrix_type, params,
+                        out_dir):
+    """2×2 grid — averaged (N×N) matrix per segment, shared color limits (5–95th pct)."""
+ 
+    seg_names = ["FEO", "LEO", "FEC", "LEC"]
+ 
+    # shared color scale from percentiles (robust to outliers)
+    all_values = np.concatenate([
+        segments[l].mean_matrix.flatten()
+        for l in seg_names if segments[l].ok
+    ])
+    vmin = np.percentile(all_values, 5)
+    vmax = np.percentile(all_values, 95)
+ 
+    fig, axes = plt.subplots(2, 2, figsize=(14, 14))
+    axes = axes.flatten()
+ 
+    for ax, label in zip(axes, seg_names):
+        seg = segments[label]
+        if not seg.ok:
+            ax.set_title(f"{label} — NO DATA"); ax.axis("off"); continue
+ 
+        im = ax.imshow(seg.mean_matrix, cmap="magma",
+                       vmin=vmin, vmax=vmax, aspect="auto")
+        ax.set_title(label, color=seg.color, fontweight="bold", fontsize=13)
+        ax.set_xlabel("Electrodes")
+        ax.set_ylabel("Electrodes")
+ 
+    fig.colorbar(im, ax=axes, fraction=0.025, pad=0.04, label="Connectivity")
+    suptitle(fig, subject, recording, matrix_type, params, "averaged connectivity matrices")
+    return save(fig, out_dir, f"{subject}_matrix_heatmap.png")
+ 
+ 
+# =============================================================================
+# 2. DIFFERENCE HEATMAPS
+# =============================================================================
+def plot_difference_heatmaps(segments, metadata,
+                             subject, recording, matrix_type, params,
+                             out_dir):
+    """
+    2×2 — four pairwise differences between segment mean matrices.
+    Shared symmetric color scale. Coolwarm: blue = decrease, red = increase.
+    """
+    comparisons = [
+        ("FEO", "LEO"),   # drift within EO
+        ("FEC", "LEC"),   # drift within EC
+        ("LEO", "FEC"),   # EO→EC transition at boundary
+        ("FEO", "LEC"),   # overall change
+    ]
+ 
+    differences, valid_pairs = [], []
+    for before, after in comparisons:
+        sb, sa = segments.get(before), segments.get(after)
+        if sb and sb.ok and sa and sa.ok:
+            differences.append(sa.mean_matrix - sb.mean_matrix)
+            valid_pairs.append((before, after))
+ 
+    if not differences:
+        print("  No valid pairs for difference heatmaps."); return
+ 
+    max_abs = max(np.abs(d).max() for d in differences)
+ 
+    fig, axes = plt.subplots(2, 2, figsize=(14, 14))
+    axes = axes.flatten()
+ 
+    for ax, diff, (before, after) in zip(axes, differences, valid_pairs):
+        im = ax.imshow(diff, cmap="coolwarm",
+                       vmin=-max_abs, vmax=max_abs, aspect="auto")
+        ax.set_title(f"{after} − {before}", fontsize=13, fontweight="bold")
+        ax.set_xlabel("Electrodes")
+        ax.set_ylabel("Electrodes")
+ 
+    # turn off any unused axes
+    for ax in axes[len(differences):]:
+        ax.axis("off")
+ 
+    fig.colorbar(im, ax=axes, fraction=0.025, pad=0.04, label="Δ Connectivity")
+    suptitle(fig, subject, recording, matrix_type, params, "difference heatmaps")
+    return save(fig, out_dir, f"{subject}_difference_heatmaps.png")
+ 
+ 
+# =============================================================================
+# 3. BIGGEST ELECTRODE CHANGES  (console only)
+# =============================================================================
+def print_biggest_electrode_changes(segments, metadata, top_n=10, **_):
+    """Print ranked list of electrodes by average absolute change per comparison."""
+    comparisons = [
+        ("FEO", "LEO"),
+        ("FEC", "LEC"),
+        ("LEO", "FEC"),
+        ("FEO", "LEC"),
+    ]
+    ch_names = metadata.get("channel_names", None)
+ 
+    for before, after in comparisons:
+        sb, sa = segments.get(before), segments.get(after)
+        if not (sb and sb.ok and sa and sa.ok):
+            print(f"\n{after} − {before}: missing data, skipping"); continue
+ 
+        diff   = sa.mean_matrix - sb.mean_matrix
+        scores = np.mean(np.abs(diff), axis=0)   # mean abs change per electrode
+        top    = np.argsort(scores)[::-1][:top_n]
+ 
+        print(f"\n{'='*50}")
+        print(f"{after} − {before}")
+        print(f"{'='*50}")
+        for rank, idx in enumerate(top, 1):
+            name = ch_names[idx] if ch_names else str(idx)
+            print(f"  {rank:2d}. {name:12s}  Δ = {scores[idx]:.5f}")
+ 
+ 
+# =============================================================================
+# 4. CONNECTIVITY DISTRIBUTION  (all upper-tri values, all windows)
+# =============================================================================
+def plot_connectivity_distribution(segments, metadata,
+                                   subject, recording, matrix_type, params,
+                                   out_dir):
+    """
+    4 rows × 2 cols — one row per segment.
+    Left: histogram of ALL upper-triangle values across ALL windows.
+    Right: stats text box.
+    Shared x-axis range across all segments.
+    """
+    seg_names = ["FEO", "LEO", "FEC", "LEC"]
+ 
+    # shared x range
+    all_vals = []
+    for label in seg_names:
+        seg = segments[label]
+        if not seg.ok: continue
+        upper = np.triu_indices(seg.matrices.shape[1], k=1)
+        all_vals.append(seg.matrices[:, upper[0], upper[1]].flatten())
+    if not all_vals:
+        print("  No data for connectivity distribution."); return
+    all_flat = np.concatenate(all_vals)
+    xmin, xmax = all_flat.min(), all_flat.max()
+ 
+    fig, axes = plt.subplots(4, 2, figsize=(12, 12),
+                             gridspec_kw={"width_ratios": [3, 1]})
+ 
+    for row, label in enumerate(seg_names):
+        seg = segments[label]
+        ax_hist  = axes[row, 0]
+        ax_stats = axes[row, 1]
+        ax_stats.axis("off")
+ 
+        if not seg.ok:
+            ax_hist.set_title(f"{label} — NO DATA"); ax_hist.axis("off"); continue
+ 
+        upper  = np.triu_indices(seg.matrices.shape[1], k=1)
+        values = seg.matrices[:, upper[0], upper[1]].flatten()
+ 
+        ax_hist.hist(values, bins=60, color=seg.color, alpha=0.85, edgecolor="none")
+        ax_hist.axvline(np.mean(values),   color="black",  lw=1.2, linestyle="--", label="mean")
+        ax_hist.axvline(np.median(values), color="#555555", lw=1.0, linestyle=":",  label="median")
+        ax_hist.set_xlim(xmin, xmax)
+        ax_hist.set_title(label, color=seg.color, fontweight="bold")
+        ax_hist.set_xlabel("Connectivity")
+        ax_hist.set_ylabel("Count")
+        ax_hist.legend(fontsize=7)
+        add_stats(ax_stats, values)
+ 
+    suptitle(fig, subject, recording, matrix_type, params,
+             "connectivity distribution (all windows, upper triangle)")
+    plt.tight_layout()
+    return save(fig, out_dir, f"{subject}_connectivity_distribution.png")
+ 
+ 
+# =============================================================================
+# 5. MEAN CONNECTIVITY PER WINDOW  distribution
+# =============================================================================
+def plot_mean_connectivity_dist(segments, metadata,
+                                subject, recording, matrix_type, params,
+                                out_dir):
+    """
+    4 rows × 2 cols.
+    Left: histogram of per-window mean connectivity values.
+    Right: stats text.
+    Shows whether mean connectivity is stable across windows in each segment.
+    """
+    seg_names = ["FEO", "LEO", "FEC", "LEC"]
+ 
+    all_means = np.concatenate([
+        segments[l].mean_windows for l in seg_names
+        if segments[l].ok and segments[l].mean_windows is not None
+    ])
+    xmin, xmax = all_means.min(), all_means.max()
+ 
+    fig, axes = plt.subplots(4, 2, figsize=(12, 12),
+                             gridspec_kw={"width_ratios": [3, 1]})
+ 
+    for row, label in enumerate(seg_names):
+        seg = segments[label]
+        ax_hist  = axes[row, 0]
+        ax_stats = axes[row, 1]
+        ax_stats.axis("off")
+ 
+        if not seg.ok or seg.mean_windows is None:
+            ax_hist.set_title(f"{label} — NO DATA"); ax_hist.axis("off"); continue
+ 
+        values = seg.mean_windows
+ 
+        ax_hist.hist(values, bins=max(5, seg.n_windows // 2),
+                     color=seg.color, alpha=0.85, edgecolor="none")
+        ax_hist.axvline(np.mean(values),   color="black",   lw=1.2, linestyle="--")
+        ax_hist.axvline(np.median(values), color="#555555", lw=1.0, linestyle=":")
+        ax_hist.set_xlim(xmin, xmax)
+        ax_hist.set_title(label, color=seg.color, fontweight="bold")
+        ax_hist.set_xlabel("Mean connectivity (per window)")
+        ax_hist.set_ylabel("Count")
+        add_stats(ax_stats, values)
+     
+    suptitle(fig, subject, recording, matrix_type, params,
+             "mean connectivity distribution per window")
+    plt.tight_layout()
+    return save(fig, out_dir, f"{subject}_mean_connectivity_dist.png")
+ 
+ 
+# =============================================================================
+# 6. NODE STRENGTH  distribution
+# =============================================================================
+def plot_node_strength_dist(segments, metadata,
+                            subject, recording, matrix_type, params,
+                            out_dir):
+    """
+    4 rows × 2 cols.
+    Left: histogram of node strength  (mean of each row in mean_matrix).
+    Right: stats text.
+    Shows which electrodes drive global connectivity in each segment.
+    """
+    seg_names = ["FEO", "LEO", "FEC", "LEC"]
+ 
+    fig, axes = plt.subplots(4, 2, figsize=(12, 12),
+                             gridspec_kw={"width_ratios": [3, 1]})
+ 
+    # shared x range
+    all_strengths = np.concatenate([
+        np.mean(segments[l].mean_matrix, axis=1)
+        for l in seg_names if segments[l].ok
+    ])
+    xmin, xmax = all_strengths.min(), all_strengths.max()
+ 
+    for row, label in enumerate(seg_names):
+        seg = segments[label]
+        ax_hist  = axes[row, 0]
+        ax_stats = axes[row, 1]
+        ax_stats.axis("off")
+ 
+        if not seg.ok:
+            ax_hist.set_title(f"{label} — NO DATA"); ax_hist.axis("off"); continue
+ 
+        strength = np.mean(seg.mean_matrix, axis=1)   # (N,)
+ 
+        ax_hist.hist(strength, bins=30, color=seg.color, alpha=0.85, edgecolor="none")
+        ax_hist.axvline(np.mean(strength),   color="black",   lw=1.2, linestyle="--")
+        ax_hist.axvline(np.median(strength), color="#555555", lw=1.0, linestyle=":")
+        ax_hist.set_xlim(xmin, xmax)
+        ax_hist.set_title(f"{label} — node strength", color=seg.color, fontweight="bold")
+        ax_hist.set_xlabel("Mean connectivity per electrode")
+        ax_hist.set_ylabel("Number of electrodes")
+ 
+        add_stats(ax_stats, strength)
+        
+    suptitle(fig, subject, recording, matrix_type, params,
+             "node strength distribution")
+    plt.tight_layout()
+    return save(fig, out_dir, f"{subject}_node_strength_dist.png")
+ 
+ 
+# =============================================================================
+# 7. DIFFERENCE DISTRIBUTION  (upper-tri Δ values between pairs)
+# =============================================================================
+def plot_difference_distribution(segments, metadata,
+                                 subject, recording, matrix_type, params,
+                                 out_dir):
+    """
+    3 rows × 2 cols — histogram of Δ upper-triangle values per comparison.
+    Shows whether change is mostly positive or negative and how spread it is.
+    """
+    comparisons = [
+        ("FEO", "LEO"),
+        ("FEC", "LEC"),
+        ("LEO", "FEC"),
+    ]
+ 
+    valid = [(b, a) for b, a in comparisons
+             if segments.get(b) and segments[b].ok
+             and segments.get(a) and segments[a].ok]
+ 
+    if not valid:
+        print("  No valid pairs for difference distribution."); return
+ 
+    fig, axes = plt.subplots(len(valid), 2, figsize=(12, 4 * len(valid)),
+                             gridspec_kw={"width_ratios": [3, 1]})
+    if len(valid) == 1:
+        axes = [axes]   # make iterable
+ 
+    for row, (before, after) in enumerate(valid):
+        diff  = segments[after].mean_matrix - segments[before].mean_matrix
+        upper = np.triu_indices(diff.shape[0], k=1)
+        values = diff[upper]
+        pos = np.mean(values > 0)*100
+ 
+        ax_hist  = axes[row][0]
+        ax_stats = axes[row][1]
+        ax_stats.axis("off")
+ 
+        ax_hist.hist(values, bins=60, color="mediumpurple", alpha=0.85, edgecolor="none")
+        ax_hist.axvline(0,                 color="black",   lw=1.5, linestyle="--", label="zero")
+        ax_hist.axvline(np.mean(values),   color="#cc3333", lw=1.2, linestyle="--", label="mean")
+        ax_hist.axvline(np.median(values), color="#555555", lw=1.0, linestyle=":",  label="median")
+        ax_hist.set_title(f"{after} − {before}", fontsize=11, fontweight="bold")
+        ax_hist.set_xlabel("Δ Connectivity")
+        ax_hist.set_ylabel("Count")
+        ax_hist.legend(fontsize=7)
+ 
+        add_stats(ax_stats, values, extra_lines = [f"Positive: {pos:.1f}%", f"Negative: {100-pos:.1f}%"])
+ 
+    suptitle(fig, subject, recording, matrix_type, params,
+             "Δ connectivity distribution between segments")
+    plt.tight_layout()
+    return save(fig, out_dir, f"{subject}_difference_distribution.png")
+ 
+ 
+# =============================================================================
+# 8. MEAN MATRIX  distribution  (upper-tri of the single mean matrix)
+# =============================================================================
+def plot_mean_matrix_distribution(segments, metadata,
+                                  subject, recording, matrix_type, params,
+                                  out_dir):
+    """
+    4 rows × 2 cols.
+    Left: histogram of upper-triangle values of the element-wise MEAN matrix.
+    (Unlike plot_connectivity_distribution which uses all windows,
+     this collapses time first and then shows the distribution of the average.)
+    """
+    seg_names = ["FEO", "LEO", "FEC", "LEC"]
+ 
+    all_vals = np.concatenate([
+        segments[l].mean_matrix[np.triu_indices(segments[l].mean_matrix.shape[0], k=1)]
+        for l in seg_names if segments[l].ok
+    ])
+    xmin, xmax = all_vals.min(), all_vals.max()
+ 
+    fig, axes = plt.subplots(4, 2, figsize=(12, 12),
+                             gridspec_kw={"width_ratios": [3, 1]})
+ 
+    for row, label in enumerate(seg_names):
+        seg = segments[label]
+        ax_hist  = axes[row, 0]
+        ax_stats = axes[row, 1]
+        ax_stats.axis("off")
+ 
+        if not seg.ok:
+            ax_hist.set_title(f"{label} — NO DATA"); ax_hist.axis("off"); continue
+ 
+        mm     = seg.mean_matrix
+        upper  = np.triu_indices(mm.shape[0], k=1)
+        values = mm[upper]
+ 
+        ax_hist.hist(values, bins=60, color=seg.color, alpha=0.85, edgecolor="none")
+        ax_hist.axvline(np.mean(values),   color="black",   lw=1.2, linestyle="--")
+        ax_hist.axvline(np.median(values), color="#555555", lw=1.0, linestyle=":")
+        ax_hist.set_xlim(xmin, xmax)
+        ax_hist.set_title(f"{label} — mean matrix", color=seg.color, fontweight="bold")
+        ax_hist.set_xlabel("Connectivity")
+        ax_hist.set_ylabel("Count")
+ 
+        add_stats(ax_stats, values)
+ 
+    suptitle(fig, subject, recording, matrix_type, params,
+             "connectivity distribution of mean matrices")
+    plt.tight_layout()
+    return save(fig, out_dir, f"{subject}_mean_matrix_distribution.png")
+
+# =============================================================================
+# MAIN
 # =============================================================================
 def main():
     args = parse_args()
+    
+    if args.subject is None:
+        print("ERROR: --subject required.", file=sys.stderr); sys.exit(1)
+
     root = getRoot(args.matrix_type, args.subject, args.recording, args.params)
     matrices = load_matrices(root)
     metadata = load_metadata(root)
-
-    segments = {
-        "FEO": Segment("FEO", config.STATE_WINDOWS["FEO"][0], config.STATE_WINDOWS["FEO"][1]),
-        
-        "LEO": Segment("LEO", config.STATE_WINDOWS["LEO"][0], config.STATE_WINDOWS["LEO"][1]),
     
-        "FEC": Segment("FEC", config.STATE_WINDOWS["FEC"][0], config.STATE_WINDOWS["FEC"][1]),
-    
-        "LEC": Segment("LEC", config.STATE_WINDOWS["LEC"][0], config.STATE_WINDOWS["LEC"][1]),
+    try:
+        ec_start_s = load_ec(args.subject, args.recording)
+    except ValueError as e:
+        print(f"  [SKIP] {e}"); sys.exit(0)
 
-    }
+    segments, ec_s = build_segments(matrices, metadata, ec_start_s, args.length)
 
-    segments = read_eyes_closed(args.subject, args.recording, args.length, segments)
+####segments = read_eyes_closed(args.subject, args.recording, args.length, segments)#####
 
     for label, seg in segments.items():
-        seg.load_segment_matrices(matrices, metadata) #tuna mame actual segmenty matic
-        seg.compute_metrics()
+        status = f"OK  ({seg.n_windows} windows)" if seg.ok else "EMPTY"
+        print(f"  {label}: [{seg.start}, {seg.end})s  →  {status}")
 
-    output_dir = (
+
+    out_dir = (
         config.SUMMARY_OUTPUT_DIR
         / "segment_figures"
         / args.matrix_type
         / args.recording
         / args.subject
     )
- 
-    save_segment_figure_hard(
+
+    
+    shared = dict(
+        subject=args.subject, recording=args.recording,
+        matrix_type=args.matrix_type, params=args.params,
+        segments=segments, metadata=metadata, out_dir=out_dir,
+    )
+    
+    plot_matrix_heatmap(**shared)
+    plot_difference_heatmaps(**shared)
+    print_biggest_electrode_changes(top_n=args.top_n, **shared)
+    plot_connectivity_distribution(**shared)
+    plot_mean_connectivity_dist(**shared)
+    plot_node_strength_dist(**shared)
+    plot_difference_distribution(**shared)
+    plot_mean_matrix_distribution(**shared)
+
+    save_statistics(
+        segments=segments,
+        metadata=metadata,
+        out_dir=out_dir,
         subject=args.subject,
         recording=args.recording,
         matrix_type=args.matrix_type,
         params=args.params,
-        segments=segments,
-        metadata=metadata,
-        output_dir=output_dir,
     )
+
+ 
+    print(f"\n  Done: {out_dir}")
+
 
     
     
